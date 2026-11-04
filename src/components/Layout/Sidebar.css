@@ -1,0 +1,456 @@
+/* Barra superior (REEMPLAZA Sidebar.css).
+   Escritorio (>= 1100px): menú horizontal a la izquierda; avisos, tema y cuenta a la derecha.
+   Tablet y celular (< 1100px): botón de menú que abre el cajón a pantalla completa. */
+
+.nav-barra {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 200;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--sidebar-border);
+  box-sizing: border-box;
+}
+.nav-izquierda {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+}
+.nav-marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 0;
+}
+.nav-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.nav-marca-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Menú horizontal (escritorio) */
+.nav-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 100%;
+}
+.nav-menu > li { flex-shrink: 0; }
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.nav-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.nav-btn-activo { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.nav-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Desplegable de Informes (escritorio) */
+.nav-panel-informes {
+  position: fixed;
+  z-index: 210;
+  min-width: 190px;
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+}
+.nav-grupo-titulo {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  padding: 5px 8px;
+}
+.nav-grupo { margin-bottom: 4px; }
+.nav-subitem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.nav-subitem-activo { background: rgba(255, 255, 255, 0.16); }
+
+/* Lado derecho: avisos, tema y cuenta */
+.nav-derecha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 100%;
+}
+.nav-wrap { position: relative; display: flex; align-items: center; }
+.nav-icono {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.nav-icono:hover,
+.nav-icono[aria-expanded="true"] { background: rgba(255, 255, 255, 0.12); }
+.nav-icono-tema {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+.nav-campana-num {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  box-sizing: border-box;
+  border: 2px solid var(--sidebar-bg);
+}
+
+.nav-usuario {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px 3px 3px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  max-width: 100%;
+}
+.nav-usuario:hover,
+.nav-usuario[aria-expanded="true"] { background: rgba(255, 255, 255, 0.12); }
+.nav-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Montserrat, sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.nav-usuario-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+  min-width: 0;
+  text-align: left;
+}
+.nav-usuario-nombre {
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.nav-usuario-rol {
+  font-size: 9.5px;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.nav-usuario-flecha { opacity: 0.8; flex-shrink: 0; }
+
+/* Desplegables de avisos y cuenta (se adaptan al tema claro u oscuro) */
+.nav-flotante {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 210;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
+  padding: 8px;
+  box-sizing: border-box;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+.nav-flotante-campana { width: 300px; max-width: calc(100vw - 16px); }
+.nav-flotante-usuario { width: 280px; max-width: calc(100vw - 16px); }
+
+.nav-mu-cab {
+  padding: 6px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.nav-mu-nombre { font-size: 13.5px; font-weight: 700; }
+.nav-mu-rol {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.nav-mu-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 6px 10px 6px;
+}
+.nav-mu-total {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 16px;
+}
+.nav-mu-vacio { font-size: 12px; color: var(--text-muted); padding: 6px 10px 10px; }
+.nav-mu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.nav-mu-item:hover { background: var(--surface-container); }
+.nav-mu-texto { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-mu-cant {
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--surface-container);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.nav-mu-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.nivel-alta { background: #ef4444; }
+.nivel-media { background: #f59e0b; }
+.nav-mu-separador { height: 1px; background: var(--border); margin: 6px 4px; }
+.nav-mu-peligro { color: var(--danger, #b91c1c); }
+
+/* Interruptor de avisos */
+.nav-mu-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+}
+.nav-mu-switch-texto { display: flex; flex-direction: column; min-width: 0; }
+.nav-mu-switch-texto .nav-mu-texto { font-size: 13px; font-weight: 600; }
+.nav-mu-switch-texto small { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+.nav-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: var(--border-strong, #cbd5e1);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background 0.15s;
+}
+.nav-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.nav-switch-on { background: var(--primary, #1d4ed8); }
+.nav-switch-bolita {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: left 0.15s;
+}
+.nav-switch-on .nav-switch-bolita { left: 20px; }
+.nav-mu-aviso { font-size: 11.5px; color: var(--text-secondary); padding: 0 10px 6px; line-height: 1.35; }
+
+/* Botón de menú y cajón (tablet y celular) */
+.nav-hamburguesa {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.nav-cajon { display: none; }
+
+/* ---------- Tablet y celular ---------- */
+@media (max-width: 1279px) {
+  .nav-marca-titulo { display: none; }
+}
+
+@media (max-width: 1099px) {
+  .nav-menu,
+  .nav-panel-informes { display: none; }
+
+  .nav-hamburguesa { display: inline-flex; }
+
+  .nav-cajon {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    background: var(--sidebar-bg);
+    padding: 10px 12px 24px;
+    box-sizing: border-box;
+    z-index: 190;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav-cajon-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 42px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .nav-cajon-item-activo { background: rgba(255, 255, 255, 0.16); }
+  .nav-cajon-item .nav-badge { margin-left: auto; }
+  .nav-cajon-grupo-titulo {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.6;
+    padding: 10px 12px 2px;
+  }
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 640px) {
+  .nav-barra { padding: 0 8px; gap: 6px; }
+  .nav-izquierda { gap: 8px; }
+  .nav-logo { width: 30px; height: 30px; }
+  .nav-derecha { gap: 4px; }
+  .nav-icono { width: 34px; height: 34px; }
+  .nav-icono-tema { width: 26px; height: 26px; }
+  .nav-usuario { gap: 5px; padding: 2px 3px 2px 2px; }
+  .nav-avatar { width: 30px; height: 30px; font-size: 11px; }
+  .nav-usuario-nombre { font-size: 11.5px; max-width: 84px; }
+  .nav-usuario-rol { font-size: 8.5px; max-width: 84px; }
+  .nav-usuario-flecha { display: none; }
+  .nav-flotante-campana,
+  .nav-flotante-usuario { width: min(300px, calc(100vw - 16px)); }
+}

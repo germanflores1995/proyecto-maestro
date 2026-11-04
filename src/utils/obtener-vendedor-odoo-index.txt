@@ -1,0 +1,82 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+// Devuelve el vendedor que cargó cada pedido en Odoo (sale.order.user_id).
+// Body: { numeros: ["0002-00042234", ...] }  →  { vendedores: { "0002-00042234": "Nombre" } }
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+};
+
+const ODOO_URL = "https://live.distribuidoramaestro.com";
+const ODOO_DB = "live";
+const ODOO_LOGIN = "expedicion";
+const ODOO_PASSWORD = Deno.env.get("ODOO_API_KEY");
+const MAX_NUMEROS = 100;
+
+function responder(cuerpo: unknown, status = 200) {
+  return new Response(JSON.stringify(cuerpo), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function odooCall(service: string, method: string, args: any[]) {
+  const res = await fetch(`${ODOO_URL}/jsonrpc`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "call",
+      params: { service, method, args },
+      id: Math.floor(Math.random() * 1000),
+    }),
+  });
+  return res.json();
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return responder({ error: "Method not allowed" }, 405);
+  }
+
+  try {
+    const { numeros } = await req.json();
+    if (!Array.isArray(numeros) || numeros.length === 0) {
+      return responder({ error: "Falta la lista de pedidos" }, 400);
+    }
+    const lista = numeros
+      .filter((n: unknown) => typeof n === "string" && /^\d{4}-\d{8}$/.test(n))
+      .slice(0, MAX_NUMEROS);
+    if (lista.length === 0) {
+      return responder({ vendedores: {} });
+    }
+
+    const auth = await odooCall("common", "login", [ODOO_DB, ODOO_LOGIN, ODOO_PASSWORD]);
+    const uid = auth.result;
+    if (!uid) return responder({ error: "No se pudo autenticar en Odoo" }, 401);
+
+    const r = await odooCall("object", "execute_kw", [
+      ODOO_DB,
+      uid,
+      ODOO_PASSWORD,
+      "sale.order",
+      "search_read",
+      [[["name", "in", lista]]],
+      { fields: ["name", "user_id"] },
+    ]);
+    if (r.error) return responder({ error: r.error?.data?.message || "Error en Odoo" }, 400);
+
+    const vendedores: Record<string, string> = {};
+    for (const o of r.result ?? []) {
+      if (o.user_id?.[1]) vendedores[o.name] = o.user_id[1];
+    }
+    return responder({ vendedores });
+  } catch (error) {
+    return responder({ error: (error as Error).message }, 500);
+  }
+});

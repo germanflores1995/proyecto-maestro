@@ -1,0 +1,25 @@
+necesito crear una app para poder mejorar la productividad en mi empresa. 
+es una distribuidora de pintureria, electricidad y demas.
+trabajo en el sector de expedicion de pedidos, los pedidos se retiran por nuestra aerea y son cargados por el area de ventas. 
+pense en crear una app en donde se puedan cargar el numero de pedido (de la app de la empresa) , el nombre del cliente (los cargaria a todos los clientes de un exel q exportaria de la app de la empresa ), el vendedor que cargo el pedido, y el estado del pedido (si esta esperando, si vendra hoy, en camino , o retira maña o etc , ayudame a ver que opciones añadimos), tambien hacer un check para saber si paga ahora o solo retira, si es que sale facturado o no. 
+que los pedidos se puedan filtrar por clientes, para asi poder ver si un cliente tiene varios pedidos por retirar o solo uno.
+que los vendedores puedan filtrar por vendedor para saber que cleintes tienen pedidos por retirar
+y una vez q el cliente retire el pedido salga de la lsita de espera yse coloque que fue entregado.
+una vez q el pedido sea entregado se guarden, y se pueda exportar un archivo de exel con los archivos que fueron entregados en el dia.
+
+P: ¿Qué estados querés para los pedidos? (Seleccione todas las que correspondan)
+R: Viene hoy, En camino (ya salió), Retira mañana, Retira otro día, En espera ( el cliente esta aqui , es al q mas prioridad se le va a dar
+
+P: ¿Quién va a usar la app principalmente?
+R: Expedición y vendedores
+
+P: ¿Cómo preferís cargar los clientes?
+R: Subir Excel con la lista de clientes
+
+no armes nada todavia. vamos a ir puliendo los detalles.
+quiero q los pedidos se orden por orden de prioridad.
+quiero saber con que herramientas lo podriamos hacer , que este conectado a internet y conectados entre todos
+
+tambien me gustaria que los pedidos que ya estan controlados ( en expedicion nos de la opcion de marcar como listos para entregar) para q el vendedor sepa q ya estan controlados y listos para q retiren
+al mismo tiempo serian 10 personas aprox usando la app al mismo tiempo, como funcionarian los limites ? teniendo en cuenta que se cargarian muchos pedidos en el dia y se actualzia constantemente el estado de pedidos y la carga
+

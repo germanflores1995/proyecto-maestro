@@ -1,0 +1,46 @@
+/* ===== Celular (REEMPLAZA el bloque de celular que pegaste antes al final de global.css) =====
+   Borrá el bloque anterior "@media (max-width: 640px)" de global.css y pegá este en su lugar. */
+@media (max-width: 640px) {
+  body {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  h1 { font-size: 17px !important; }
+  h2 { font-size: 15px !important; }
+  h3 { font-size: 13.5px !important; }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    gap: 5px;
+    min-height: 34px;
+    border-radius: 8px;
+  }
+  .btn-icon {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+  .input {
+    padding: 6px 9px;
+    font-size: 14px;
+    min-height: 36px;
+  }
+  .badge {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+  .card {
+    border-radius: 10px;
+  }
+  .modal {
+    max-width: calc(100vw - 24px) !important;
+  }
+  .modal-header { padding: 10px 12px !important; }
+  .modal-body { padding: 12px !important; }
+  .modal-footer { padding: 10px 12px !important; flex-wrap: wrap; gap: 8px; }
+
+  table { font-size: 12px !important; }
+  th { font-size: 10px !important; padding: 6px 6px !important; }
+  td { padding: 6px !important; }
+}

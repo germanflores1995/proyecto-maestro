@@ -1,0 +1,337 @@
+@import './tokens.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: light;
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Montserrat', sans-serif;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; }
+
+a { color: inherit; text-decoration: none; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+/* Focus visible accesible */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ============ Inputs ============ */
+.input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--primary); }
+.input::placeholder { color: var(--text-muted); }
+.input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.form-error {
+  font-size: 12px;
+  color: var(--danger);
+  margin-top: 8px;
+}
+
+/* ============ Buttons ============ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  white-space: nowrap;
+  transition: opacity 0.15s, background 0.15s, transform 0.1s;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+
+.btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-outline:hover:not(:disabled) { background: var(--primary-subtle); }
+
+.btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid transparent; }
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+
+.btn-success { background: var(--success-bg); color: var(--success); border: 1px solid transparent; }
+.btn-success:hover:not(:disabled) { background: var(--success); color: #fff; }
+
+.btn-icon {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+}
+.btn-icon:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ============ Badge / Status pill ============ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* ============ Card ============ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ============ Modal ============ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 15, 25, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 700px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-modal);
+}
+.modal-header,
+.modal-footer { flex-shrink: 0; }
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-body { padding: 22px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-footer {
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ============ Toggle switch ============ */
+.toggle {
+  width: 38px;
+  height: 21px;
+  border-radius: var(--radius-pill);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  border: none;
+}
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ============ Spinner ============ */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============ Empty state ============ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  gap: 10px;
+  text-align: center;
+}
+
+/* ============ Utility ============ */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.text-muted { color: var(--text-secondary); }
+.text-xs { font-size: 12px; }
+.w-full { width: 100%; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+/* ============ Layout responsive (Sidebar) ============ */
+.app-sidebar {
+  transition: transform 0.25s ease;
+}
+.sidebar-close-mobile-btn { display: none; }
+
+@media (max-width: 1023px) {
+  .app-sidebar { transform: translateX(-100%); }
+  .app-sidebar.sidebar-open { transform: translateX(0); }
+  .sidebar-close-mobile-btn { display: flex !important; }
+  .app-content { margin-left: 0 !important; }
+}
+@media (min-width: 1024px) {
+  .app-sidebar { transform: translateX(0) !important; }
+  .sidebar-scrim { display: none !important; }
+  .hamburger-btn { display: none !important; }
+}
+@media (max-width: 480px) {
+  .user-name-block { display: none; }
+}
+
+.tabla-fila:hover { background: var(--surface-hover); }
+
+/* ============ Modales y pantallas grandes ============ */
+
+
+/* El contenido aprovecha el ancho de la pantalla (con un tope muy grande) */
+.app-content main > div {
+  max-width: 2400px !important;
+}
+
+/* En pantallas grandes los modales se agrandan completos: letras, botones y espacios */
+@media (min-width: 1700px) {
+  .modal { zoom: 1.2; max-width: 720px; max-height: calc(90vh / 1.2); }
+}
+@media (min-width: 2100px) {
+  .modal { zoom: 1.4; max-width: 720px; max-height: calc(90vh / 1.4); }
+}
+@media (min-width: 2600px) {
+  .modal { zoom: 1.7; max-width: 720px; max-height: calc(90vh / 1.7); }
+}
+
+
+/* ===== Celular (REEMPLAZA el bloque de celular que pegaste antes al final de global.css) =====
+   Borrá el bloque anterior "@media (max-width: 640px)" de global.css y pegá este en su lugar. */
+@media (max-width: 640px) {
+  body {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  h1 { font-size: 17px !important; }
+  h2 { font-size: 15px !important; }
+  h3 { font-size: 13.5px !important; }
+
+  .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    gap: 5px;
+    min-height: 34px;
+    border-radius: 8px;
+  }
+  .btn-icon {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+  .input {
+    padding: 6px 9px;
+    font-size: 14px;
+    min-height: 36px;
+  }
+  .badge {
+    font-size: 9.5px;
+    padding: 2px 6px;
+  }
+  .card {
+    border-radius: 10px;
+  }
+  .modal {
+    max-width: calc(100vw - 24px) !important;
+  }
+  .modal-header { padding: 10px 12px !important; }
+  .modal-body { padding: 12px !important; }
+  .modal-footer { padding: 10px 12px !important; flex-wrap: wrap; gap: 8px; }
+
+  table { font-size: 12px !important; }
+  th { font-size: 10px !important; padding: 6px 6px !important; }
+  td { padding: 6px !important; }
+}
