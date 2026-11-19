@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Phone, Mail, Plus, Ban, RotateCcw, CalendarClock, Check, XCircle } from "lucide-react";
+import { X, Phone, Mail, Plus, Ban, RotateCcw, CalendarClock, Check, XCircle, Pencil } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -40,6 +40,8 @@ export default function DetallePresupuesto({
   const [proximoLocal, setProximoLocal] = useState(
     aValorLocal(seguimiento.proximo_seguimiento_at),
   );
+  const [editandoCliente, setEditandoCliente] = useState(false);
+  const [clienteLocal, setClienteLocal] = useState(seguimiento.cliente_nombre || "");
   const [anulando, setAnulando] = useState(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
@@ -66,6 +68,10 @@ export default function DetallePresupuesto({
   useEffect(() => {
     setProximoLocal(aValorLocal(seguimiento.proximo_seguimiento_at));
   }, [seguimiento.proximo_seguimiento_at]);
+
+  useEffect(() => {
+    setClienteLocal(seguimiento.cliente_nombre || "");
+  }, [seguimiento.cliente_nombre]);
 
   function nombreEstado(clave) {
     return estados.find((e) => e.clave === clave)?.etiqueta || clave;
@@ -175,6 +181,32 @@ export default function DetallePresupuesto({
     onCambio?.();
   }
 
+  async function guardarCliente() {
+    const nombre = clienteLocal.trim();
+    if (!nombre) {
+      setError("El nombre del cliente no puede quedar vacío.");
+      return;
+    }
+    if (nombre === (seguimiento.cliente_nombre || "")) {
+      setEditandoCliente(false);
+      return;
+    }
+    setOcupado(true);
+    setError("");
+    const { data, error: errorUpdate } = await supabase
+      .from("presupuesto_seguimientos")
+      .update({ cliente_nombre: nombre })
+      .eq("id", seguimiento.id)
+      .select("id");
+    setOcupado(false);
+    if (errorUpdate || !data?.length) {
+      setError("No se pudo cambiar el nombre del cliente.");
+      return;
+    }
+    setEditandoCliente(false);
+    onCambio?.();
+  }
+
   async function confirmarAnulacion() {
     const ok = await ejecutar("anular_gestion_presupuesto", {
       p_gestion_id: anulando.id,
@@ -229,7 +261,49 @@ export default function DetallePresupuesto({
               {seguimiento.ciclo > 1 && <span style={styles.ciclo}>Ciclo {seguimiento.ciclo}</span>}
               {ev.importeAlto && <span style={styles.ciclo}>🔥 Importe alto</span>}
             </div>
-            <h2 style={styles.cliente}>{seguimiento.cliente_nombre}</h2>
+            {editandoCliente ? (
+              <div style={styles.filaCliente}>
+                <input
+                  className="input"
+                  value={clienteLocal}
+                  onChange={(e) => setClienteLocal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") guardarCliente();
+                    if (e.key === "Escape") {
+                      setClienteLocal(seguimiento.cliente_nombre || "");
+                      setEditandoCliente(false);
+                    }
+                  }}
+                  autoFocus
+                  style={{ flex: "1 1 240px", minWidth: 0 }}
+                />
+                <button className="btn btn-primary" onClick={guardarCliente} disabled={ocupado}>
+                  Guardar
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setClienteLocal(seguimiento.cliente_nombre || "");
+                    setEditandoCliente(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <h2 style={styles.cliente}>
+                {seguimiento.cliente_nombre}
+                <button
+                  className="btn-icon"
+                  title="Editar nombre del cliente"
+                  aria-label="Editar nombre del cliente"
+                  onClick={() => setEditandoCliente(true)}
+                  style={{ marginLeft: 6, verticalAlign: "middle" }}
+                >
+                  <Pencil size={14} />
+                </button>
+              </h2>
+            )}
           </div>
           <button className="btn-icon" onClick={onClose} aria-label="Cerrar">
             <X size={20} />
@@ -551,6 +625,7 @@ const styles = {
   numeroFila: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   numero: { fontSize: 14 },
   cliente: { margin: "6px 0 0", fontSize: 19, fontWeight: 700 },
+  filaCliente: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 },
   pildora: {
     display: "inline-block",
     padding: "3px 9px",

@@ -301,23 +301,32 @@ export default function PresupuestosView({ vista = "lista", onCambiarVista }) {
           <p className="pres-subtitulo">Seguimiento comercial de presupuestos de Odoo.</p>
         </div>
         <div className="pres-acciones">
-          <div className="pres-contador">
-            <span className="pres-contador-etiqueta">Abiertos</span>
-            <strong className="pres-contador-valor">{abiertos.length}</strong>
-          </div>
-          <button
-            onClick={() => setFiltro(filtro === "alerta" ? "activos" : "alerta")}
-            title="Ver solo los presupuestos en alerta"
-            className={`pres-contador pres-contador-boton${filtro === "alerta" ? " pres-contador-activo" : ""}`}
-          >
-            <span className="pres-contador-etiqueta">En alerta</span>
-            <strong
-              className="pres-contador-valor"
-              style={{ color: cantidadAlerta ? "#b91c1c" : undefined }}
-            >
-              {cantidadAlerta}
-            </strong>
-          </button>
+          {/* Los contadores solo se muestran en la lista de presupuestos, no en estadísticas */}
+          {vista !== "estadisticas" && (
+            <>
+              <button
+                onClick={() => setFiltro("activos")}
+                title="Ver los presupuestos abiertos"
+                className={`pres-contador pres-contador-boton${filtro === "activos" ? " pres-contador-activo" : ""}`}
+              >
+                <span className="pres-contador-etiqueta">Abiertos</span>
+                <strong className="pres-contador-valor">{abiertos.length}</strong>
+              </button>
+              <button
+                onClick={() => setFiltro(filtro === "alerta" ? "activos" : "alerta")}
+                title="Ver solo los presupuestos en alerta"
+                className={`pres-contador pres-contador-boton${filtro === "alerta" ? " pres-contador-activo" : ""}`}
+              >
+                <span className="pres-contador-etiqueta">En alerta</span>
+                <strong
+                  className="pres-contador-valor"
+                  style={{ color: cantidadAlerta ? "#b91c1c" : undefined }}
+                >
+                  {cantidadAlerta}
+                </strong>
+              </button>
+            </>
+          )}
           {esAdmin && (
             <button className="btn btn-ghost" onClick={() => setMostrarConfig(true)}>
               <Settings size={16} /> Configuración
@@ -342,6 +351,7 @@ export default function PresupuestosView({ vista = "lista", onCambiarVista }) {
           lista={lista}
           estados={estados}
           catalogos={catalogos}
+          config={config}
           onAbrirDetalle={(p) => setSeleccionadoId(p.id)}
         />
       ) : (

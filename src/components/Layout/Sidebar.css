@@ -1,6 +1,6 @@
 /* Barra superior (REEMPLAZA Sidebar.css).
    Escritorio (>= 1100px): menú horizontal a la izquierda; avisos, tema y cuenta a la derecha.
-   Tablet y celular (< 1100px): botón de menú que abre el cajón a pantalla completa. */
+   Tablet y celular (< 1100px): barra inferior con ícono y nombre de cada sección. */
 
 .nav-barra {
   position: fixed;
@@ -365,77 +365,184 @@
 .nav-switch-on .nav-switch-bolita { left: 20px; }
 .nav-mu-aviso { font-size: 11.5px; color: var(--text-secondary); padding: 0 10px 6px; line-height: 1.35; }
 
-/* Botón de menú y cajón (tablet y celular) */
-.nav-hamburguesa {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  border: none;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.nav-cajon { display: none; }
+/* ---------- Barra inferior y hoja de Informes (solo tablet y celular) ---------- */
+:root { --nav-inf-alto: 64px; }
 
-/* ---------- Tablet y celular ---------- */
+.nav-inferior,
+.nav-hoja,
+.nav-hoja-fondo { display: none; }
+
+@keyframes nav-hoja-sube {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes nav-fondo-entra {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---------- Pantallas medianas ---------- */
 @media (max-width: 1279px) {
   .nav-marca-titulo { display: none; }
 }
 
-@media (max-width: 1099px) {
+/* ---------- Tablet y celular ----------
+   Pantallas angostas (< 1100px) y también tablets táctiles en horizontal (hasta 1400px) */
+@media (max-width: 1099px), (pointer: coarse) and (max-width: 1400px) {
   .nav-menu,
   .nav-panel-informes { display: none; }
 
-  .nav-hamburguesa { display: inline-flex; }
+  /* El contenido deja lugar abajo para que la barra no tape nada */
+  body { padding-bottom: calc(var(--nav-inf-alto) + env(safe-area-inset-bottom, 0px)); }
 
-  .nav-cajon {
+  .nav-inferior {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: stretch;
+    justify-content: center;
+    gap: 4px;
     position: fixed;
-    top: 60px;
     left: 0;
     right: 0;
     bottom: 0;
-    overflow-y: auto;
+    z-index: 200;
+    height: calc(var(--nav-inf-alto) + env(safe-area-inset-bottom, 0px));
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
     background: var(--sidebar-bg);
-    padding: 10px 12px 24px;
-    box-sizing: border-box;
-    z-index: 190;
-    -webkit-overflow-scrolling: touch;
+    border-top: 1px solid var(--sidebar-border);
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
   }
-  .nav-cajon-item {
+  .nav-inf-item {
+    flex: 1 1 0;
+    max-width: 150px;
+    min-width: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 42px;
-    padding: 7px 12px;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 2px;
     border: none;
-    border-radius: 10px;
     background: transparent;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
+    color: rgba(255, 255, 255, 0.68);
     font-family: inherit;
-    box-sizing: border-box;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
-  .nav-cajon-item-activo { background: rgba(255, 255, 255, 0.16); }
-  .nav-cajon-item .nav-badge { margin-left: auto; }
-  .nav-cajon-grupo-titulo {
+  .nav-inf-icono {
+    position: relative;
+    width: 56px;
+    height: 30px;
+    border-radius: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .nav-inf-item:active .nav-inf-icono { background: rgba(255, 255, 255, 0.1); }
+  .nav-inf-item-activo { color: #fff; font-weight: 700; }
+  .nav-inf-item-activo .nav-inf-icono { background: rgba(255, 255, 255, 0.2); }
+  .nav-inf-texto {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+  .nav-inf-badge {
+    position: absolute;
+    top: -5px;
+    right: 3px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+    box-sizing: border-box;
+    border: 2px solid var(--sidebar-bg);
+  }
+
+  /* Hoja de Informes: sube desde la barra inferior */
+  .nav-hoja-fondo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    background: rgba(15, 23, 42, 0.38);
+    animation: nav-fondo-entra 0.15s ease-out;
+  }
+  .nav-hoja {
+    display: block;
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--nav-inf-alto) + env(safe-area-inset-bottom, 0px) + 10px);
+    transform: translate(-50%, 0);
+    width: min(400px, calc(100vw - 16px));
+    max-height: calc(100vh - 60px - var(--nav-inf-alto) - 40px);
+    overflow-y: auto;
+    z-index: 199;
+    box-sizing: border-box;
+    padding: 8px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.3);
+    animation: nav-hoja-sube 0.18s ease-out;
+  }
+  .nav-hoja-grupo + .nav-hoja-grupo {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .nav-hoja-titulo {
     font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    opacity: 0.6;
-    padding: 10px 12px 2px;
+    color: var(--text-muted);
+    padding: 6px 10px 4px;
   }
+  .nav-hoja-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 46px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .nav-hoja-item:hover { background: var(--surface-container); }
+  .nav-hoja-icono {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--surface-container);
+    color: var(--text-secondary);
+  }
+  .nav-hoja-item-activo { background: var(--primary-subtle); color: var(--primary); }
+  .nav-hoja-item-activo .nav-hoja-icono { background: var(--primary); color: #fff; }
 }
 
 /* ---------- Celular ---------- */

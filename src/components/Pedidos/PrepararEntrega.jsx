@@ -1,13 +1,23 @@
 import { useState } from "react";
 import { X, PackageCheck, MapPin, Minus, Plus } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { CATEGORIAS_BULTO, ESTANTERIAS, PALETS } from "../../utils/bultos";
+import {
+  CATEGORIAS_BULTO,
+  ESTANTERIAS,
+  PALETS,
+  UBIC_MOSTRADOR,
+  UBIC_PALET_COMPLETO,
+  CATEGORIA_PALET_COMPLETO,
+  esUbicacionEspecial,
+} from "../../utils/bultos";
 
 // Ventana que se abre al pasar un pedido a "listo para entregar".
 // Pide ubicación y bultos, y guarda todo junto.
 export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
-  const [ubicacion, setUbicacion] = useState("");
+  // Los pedidos de Uber/Didi salen por el mostrador: se preselecciona (se puede cambiar)
+  const [ubicacion, setUbicacion] = useState(pedido.estado === "uber_didi" ? UBIC_MOSTRADOR : "");
   const [bultos, setBultos] = useState({}); // { clave: { cantidad, detalle } }
+  const [cantPalets, setCantPalets] = useState(1); // por defecto 1 palet completo
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
@@ -24,7 +34,12 @@ export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
 
   // Solo se guardan las categorías con cantidad
   const seleccionados = CATEGORIAS_BULTO.filter((c) => cantidadDe(c.clave) > 0);
-  const totalBultos = seleccionados.reduce((acc, c) => acc + cantidadDe(c.clave), 0);
+  const esEspecial = esUbicacionEspecial(ubicacion);
+  const esPaletCompleto = ubicacion === UBIC_PALET_COMPLETO;
+  const palets = Math.max(1, Math.floor(Number(cantPalets) || 1));
+  const totalBultos =
+    seleccionados.reduce((acc, c) => acc + cantidadDe(c.clave), 0) +
+    (esPaletCompleto ? palets : 0);
 
   async function guardar(e) {
     e.preventDefault();
@@ -32,13 +47,16 @@ export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
       setError("Elegí la ubicación del pedido.");
       return;
     }
-    if (seleccionados.length === 0) {
+    // Mostrador y Palet completo no obligan a cargar bultos ni detalle
+    if (!esEspecial && seleccionados.length === 0) {
       setError("Cargá al menos un bulto.");
       return;
     }
-    const otrosSinDetalle = seleccionados.find(
-      (c) => c.detalleObligatorio && !detalleDe(c.clave).trim(),
-    );
+    const otrosSinDetalle = esEspecial
+      ? null
+      : seleccionados.find(
+          (c) => c.detalleObligatorio && !detalleDe(c.clave).trim(),
+        );
     if (otrosSinDetalle) {
       setError('Escribí qué son los bultos de "Otros".');
       return;
@@ -46,11 +64,16 @@ export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
 
     setGuardando(true);
     setError("");
-    const payload = seleccionados.map((c) => ({
-      categoria: c.clave,
-      cantidad: cantidadDe(c.clave),
-      detalle: detalleDe(c.clave).trim() || null,
-    }));
+    const payload = [
+      ...(esPaletCompleto
+        ? [{ categoria: CATEGORIA_PALET_COMPLETO, cantidad: palets, detalle: null }]
+        : []),
+      ...seleccionados.map((c) => ({
+        categoria: c.clave,
+        cantidad: cantidadDe(c.clave),
+        detalle: detalleDe(c.clave).trim() || null,
+      })),
+    ];
     const { error: errorRpc } = await supabase.rpc("marcar_listo_para_entregar", {
       p_pedido_id: pedido.id,
       p_ubicacion: ubicacion,
@@ -94,9 +117,58 @@ export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
               <BotonUbic key={u} texto={u} activo={ubicacion === u} onClick={() => setUbicacion(u)} />
             ))}
           </div>
+          <div style={s.gridEspeciales}>
+            <BotonUbic
+              texto="Mostrador"
+              activo={ubicacion === UBIC_MOSTRADOR}
+              onClick={() => setUbicacion(UBIC_MOSTRADOR)}
+            />
+            <BotonUbic
+              texto="Palet completo"
+              activo={ubicacion === UBIC_PALET_COMPLETO}
+              onClick={() => setUbicacion(UBIC_PALET_COMPLETO)}
+            />
+          </div>
+
+          {esPaletCompleto && (
+            <div style={s.filaPalets}>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Cantidad de palets completos</span>
+              <div style={s.stepper}>
+                <button
+                  type="button"
+                  style={s.stepBtn}
+                  onClick={() => setCantPalets(Math.max(1, palets - 1))}
+                  disabled={palets <= 1}
+                  aria-label="Quitar palet"
+                >
+                  <Minus size={12} />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={cantPalets}
+                  onChange={(e) => setCantPalets(e.target.value)}
+                  onBlur={() => setCantPalets(palets)}
+                  style={s.inputCant}
+                  aria-label="Cantidad de palets completos"
+                />
+                <button
+                  type="button"
+                  style={s.stepBtn}
+                  onClick={() => setCantPalets(palets + 1)}
+                  aria-label="Sumar palet"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Bultos */}
-          <div style={s.etiquetaSeccion}>Bultos</div>
+          <div style={s.etiquetaSeccion}>
+            Bultos{esEspecial ? " (opcional)" : ""}
+          </div>
           <div style={s.gridBultos}>
             {CATEGORIAS_BULTO.map((c) => {
               const cant = cantidadDe(c.clave);
@@ -147,7 +219,7 @@ export default function PrepararEntrega({ pedido, onCancelar, onGuardado }) {
                     <input
                       value={detalleDe(c.clave)}
                       onChange={(e) => cambiarDetalle(c.clave, e.target.value)}
-                      placeholder={c.detalleObligatorio ? "Qué son (obligatorio)" : c.ayuda || "Detalle (opcional)"}
+                      placeholder={c.detalleObligatorio && !esEspecial ? "Qué son (obligatorio)" : c.ayuda || "Detalle (opcional)"}
                       style={s.inputDetalle}
                     />
                   )}
@@ -268,6 +340,21 @@ const s = {
     display: "grid",
     gridTemplateColumns: "repeat(6, 1fr)",
     gap: 5,
+  },
+  gridEspeciales: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 5,
+  },
+  filaPalets: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    padding: "6px 9px",
+    borderRadius: 8,
+    border: "1px solid var(--primary, #1d4ed8)",
+    background: "var(--primary-subtle, #eff6ff)",
   },
   gridBultos: {
     display: "grid",

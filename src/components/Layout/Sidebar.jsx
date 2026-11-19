@@ -4,14 +4,17 @@ import {
   PackageSearch,
   FileText,
   BarChart3,
+  Target,
+  TrendingUp,
   HelpCircle,
   LogOut,
   ChevronDown,
-  Menu,
-  X,
   Bell,
   Sun,
   Moon,
+  Users,
+  Wallet,
+  MoreHorizontal,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -24,6 +27,16 @@ import "./Sidebar.css";
 // Altura de la barra superior. App.jsx deja este espacio arriba del contenido.
 export const ALTURA_NAV = 60;
 
+// Ícono de cada informe en la hoja de "Informes" (tablet y celular)
+const ICONO_INFORME = {
+  metricas: BarChart3,
+  objetivo: Target,
+  estadisticas_presupuestos: TrendingUp,
+};
+
+// Nombre del botón que abre informes y secciones secundarias
+const ETIQUETA_MAS = "Más";
+
 export default function Sidebar({ pagina, setPagina }) {
   const {
     perfil,
@@ -31,6 +44,7 @@ export default function Sidebar({ pagina, setPagina }) {
     esAdmin,
     esExpedicion,
     esVendedor,
+    esCaja,
     esEncargadoVentas,
     esEncargadoExpedicion,
     puedeVerMetricas,
@@ -60,6 +74,11 @@ export default function Sidebar({ pagina, setPagina }) {
     navItems.push({ key: "presupuestos", label: "Presupuestos", icon: FileText, badge: porPagina.presupuestos || 0 });
   }
 
+  // Solo Caja ve su pantalla en la barra principal; el admin la tiene en "Más"
+  if (esCaja && !esAdmin) {
+    navItems.push({ key: "caja", label: "Caja", icon: Wallet, badge: 0 });
+  }
+
   // Informes: un grupo por área
   const grupos = [];
   const informesExpedicion = [];
@@ -77,11 +96,13 @@ export default function Sidebar({ pagina, setPagina }) {
   }
   if (informesVentas.length) grupos.push({ titulo: "Ventas", items: informesVentas });
 
+
   const informesActivo = grupos.some((g) => g.items.some((i) => i.key === pagina));
 
-  // Un solo desplegable abierto a la vez: null | "informes" | "campana" | "usuario"
+  // Un solo desplegable de la barra superior abierto a la vez: null | "informes" | "campana" | "usuario"
   const [panel, setPanel] = useState(null);
-  const [cajonAbierto, setCajonAbierto] = useState(false);
+  // Hoja de "Informes" de la barra inferior (tablet y celular)
+  const [hoja, setHoja] = useState(false);
   const [posInformes, setPosInformes] = useState({ left: 0, top: 0 });
   const [mostrarAyuda, setMostrarAyuda] = useState(false);
 
@@ -110,7 +131,20 @@ export default function Sidebar({ pagina, setPagina }) {
     };
   }, [panel]);
 
-  const alternarPanel = (cual) => setPanel((p) => (p === cual ? null : cual));
+  // La hoja de Informes se cierra con Escape (tocar fuera lo hace el fondo oscuro)
+  useEffect(() => {
+    if (!hoja) return;
+    const tecla = (e) => {
+      if (e.key === "Escape") setHoja(false);
+    };
+    document.addEventListener("keydown", tecla);
+    return () => document.removeEventListener("keydown", tecla);
+  }, [hoja]);
+
+  const alternarPanel = (cual) => {
+    setHoja(false);
+    setPanel((p) => (p === cual ? null : cual));
+  };
 
   const alternarInformes = () => {
     if (panel !== "informes" && botonInformesRef.current) {
@@ -120,258 +154,303 @@ export default function Sidebar({ pagina, setPagina }) {
     alternarPanel("informes");
   };
 
+  const alternarHoja = () => {
+    setPanel(null);
+    setHoja((v) => !v);
+  };
+
   const irA = (key) => {
     setPagina(key);
     setPanel(null);
-    setCajonAbierto(false);
+    setHoja(false);
   };
 
   const irAInicio = () => {
-    const paginaInicio = esVendedor ? "vendedor" : esExpedicion ? "expedicion" : "admin";
+    const paginaInicio = esVendedor
+      ? "vendedor"
+      : esExpedicion
+        ? "expedicion"
+        : esCaja
+          ? "caja"
+          : "admin";
     setPagina(paginaInicio);
   };
 
   const abrirAyuda = () => {
     setPanel(null);
-    setCajonAbierto(false);
+    setHoja(false);
     setMostrarAyuda(true);
   };
 
   return (
-    <nav className="nav-barra">
-      <div className="nav-izquierda">
-        {/* Tablet y celular: botón de menú (único) */}
-        <button
-          type="button"
-          className="nav-hamburguesa"
-          onClick={() => {
-            setPanel(null);
-            setCajonAbierto((v) => !v);
-          }}
-          aria-label={cajonAbierto ? "Cerrar menú" : "Abrir menú"}
-          aria-expanded={cajonAbierto}
-        >
-          {cajonAbierto ? <X size={20} /> : <Menu size={20} />}
-        </button>
+    <>
+      <nav className="nav-barra">
+        <div className="nav-izquierda">
+          <div className="nav-marca" onClick={irAInicio}>
+            <img src="/logo.png" alt="DM" className="nav-logo" />
+            <div className="nav-marca-titulo">Distribuidora Maestro</div>
+          </div>
 
-        <div className="nav-marca" onClick={irAInicio}>
-          <img src="/logo.png" alt="DM" className="nav-logo" />
-          <div className="nav-marca-titulo">Distribuidora Maestro</div>
-        </div>
-
-        {/* Escritorio: menú horizontal */}
-        <ul className="nav-menu">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const activo = pagina === item.key;
-            return (
-              <li key={item.key}>
+          {/* Escritorio: menú horizontal */}
+          <ul className="nav-menu">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const activo = pagina === item.key;
+              return (
+                <li key={item.key}>
+                  <button
+                    type="button"
+                    onClick={() => irA(item.key)}
+                    className={`nav-btn${activo ? " nav-btn-activo" : ""}`}
+                  >
+                    <Icon size={15} />
+                    {item.label}
+                    {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+                  </button>
+                </li>
+              );
+            })}
+            {grupos.length > 0 && (
+              <li>
                 <button
                   type="button"
-                  onClick={() => irA(item.key)}
-                  className={`nav-btn${activo ? " nav-btn-activo" : ""}`}
+                  ref={botonInformesRef}
+                  onClick={alternarInformes}
+                  className={`nav-btn${informesActivo || panel === "informes" ? " nav-btn-activo" : ""}`}
                 >
-                  <Icon size={15} />
-                  {item.label}
-                  {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
+                  <MoreHorizontal size={15} />
+                  {ETIQUETA_MAS}
+                  <ChevronDown size={14} />
                 </button>
               </li>
-            );
-          })}
-          {grupos.length > 0 && (
-            <li>
-              <button
-                type="button"
-                ref={botonInformesRef}
-                onClick={alternarInformes}
-                className={`nav-btn${informesActivo || panel === "informes" ? " nav-btn-activo" : ""}`}
-              >
-                <BarChart3 size={15} />
-                Informes
-                <ChevronDown size={14} />
-              </button>
-            </li>
-          )}
-        </ul>
-      </div>
+            )}
+          </ul>
+        </div>
 
-      {/* Derecha: avisos, tema y cuenta */}
-      <div className="nav-derecha">
-        <div className="nav-wrap" ref={campanaRef}>
+        {/* Derecha: avisos, tema y cuenta */}
+        <div className="nav-derecha">
+          <div className="nav-wrap" ref={campanaRef}>
+            <button
+              type="button"
+              className="nav-icono"
+              onClick={() => alternarPanel("campana")}
+              aria-label={total > 0 ? `Notificaciones: ${total} pendientes` : "Notificaciones"}
+              aria-expanded={panel === "campana"}
+              title="Requiere atención"
+            >
+              <Bell size={17} />
+              {total > 0 && <span className="nav-campana-num">{total > 99 ? "99+" : total}</span>}
+            </button>
+
+            {panel === "campana" && (
+              <div className="nav-flotante nav-flotante-campana" role="menu">
+                <div className="nav-mu-titulo">
+                  Requiere atención
+                  {total > 0 && <span className="nav-mu-total">{total}</span>}
+                </div>
+                {items.length === 0 ? (
+                  <div className="nav-mu-vacio">Todo en orden por ahora.</div>
+                ) : (
+                  items.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      role="menuitem"
+                      className="nav-mu-item"
+                      onClick={() => irA(it.pagina)}
+                    >
+                      <span className={`nav-mu-punto nivel-${it.nivel}`} />
+                      <span className="nav-mu-texto">{it.texto}</span>
+                      <span className="nav-mu-cant">{it.cantidad}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
-            className="nav-icono"
-            onClick={() => alternarPanel("campana")}
-            aria-label={total > 0 ? `Notificaciones: ${total} pendientes` : "Notificaciones"}
-            aria-expanded={panel === "campana"}
-            title="Requiere atención"
+            className="nav-icono nav-icono-tema"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+            title={theme === "dark" ? "Tema claro" : "Tema oscuro"}
           >
-            <Bell size={17} />
-            {total > 0 && <span className="nav-campana-num">{total > 99 ? "99+" : total}</span>}
+            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
           </button>
 
-          {panel === "campana" && (
-            <div className="nav-flotante nav-flotante-campana" role="menu">
-              <div className="nav-mu-titulo">
-                Requiere atención
-                {total > 0 && <span className="nav-mu-total">{total}</span>}
-              </div>
-              {items.length === 0 ? (
-                <div className="nav-mu-vacio">Todo en orden por ahora.</div>
-              ) : (
-                items.map((it) => (
+          <div className="nav-wrap" ref={usuarioRef}>
+            <button
+              type="button"
+              className="nav-usuario"
+              onClick={() => alternarPanel("usuario")}
+              aria-haspopup="menu"
+              aria-expanded={panel === "usuario"}
+              title="Tu cuenta"
+            >
+              <span className="nav-avatar">{iniciales(perfil?.nombre)}</span>
+              <span className="nav-usuario-texto">
+                <span className="nav-usuario-nombre">{perfil?.nombre}</span>
+                <span className="nav-usuario-rol">{etiquetaRol(perfil?.rol)}</span>
+              </span>
+              <ChevronDown size={14} className="nav-usuario-flecha" />
+            </button>
+
+            {panel === "usuario" && (
+              <div className="nav-flotante nav-flotante-usuario" role="menu">
+                <div className="nav-mu-cab">
+                  <div className="nav-mu-nombre">{perfil?.nombre}</div>
+                  <div className="nav-mu-rol">{etiquetaRol(perfil?.rol)}</div>
+                </div>
+
+                <div className="nav-mu-switch">
+                  <div className="nav-mu-switch-texto">
+                    <span className="nav-mu-texto">Avisos</span>
+                    <small>
+                      {avisosSoportados
+                        ? "Te avisa de lo que pide atención cuando estás en otra pestaña"
+                        : "Este navegador no permite avisos"}
+                    </small>
+                  </div>
                   <button
-                    key={it.id}
+                    type="button"
+                    role="switch"
+                    aria-checked={avisosActivos}
+                    aria-label="Activar avisos"
+                    className={`nav-switch${avisosActivos ? " nav-switch-on" : ""}`}
+                    onClick={cambiarAvisos}
+                    disabled={!avisosSoportados}
+                  >
+                    <span className="nav-switch-bolita" />
+                  </button>
+                </div>
+                {mensajeAvisos && <div className="nav-mu-aviso">{mensajeAvisos}</div>}
+
+                <div className="nav-mu-separador" />
+                {esAdmin && (
+                  <button
                     type="button"
                     role="menuitem"
                     className="nav-mu-item"
-                    onClick={() => irA(it.pagina)}
+                    onClick={() => irA("admin")}
                   >
-                    <span className={`nav-mu-punto nivel-${it.nivel}`} />
-                    <span className="nav-mu-texto">{it.texto}</span>
-                    <span className="nav-mu-cant">{it.cantidad}</span>
+                    <Users size={16} />
+                    <span className="nav-mu-texto">Administrador</span>
                   </button>
-                ))
-              )}
-            </div>
-          )}
+                )}
+                <button type="button" role="menuitem" className="nav-mu-item" onClick={abrirAyuda}>
+                  <HelpCircle size={16} />
+                  <span className="nav-mu-texto">Ayuda</span>
+                </button>
+                <button type="button" role="menuitem" className="nav-mu-item nav-mu-peligro" onClick={logout}>
+                  <LogOut size={16} />
+                  <span className="nav-mu-texto">Cerrar sesión</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        <button
-          type="button"
-          className="nav-icono nav-icono-tema"
-          onClick={toggleTheme}
-          aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-          title={theme === "dark" ? "Tema claro" : "Tema oscuro"}
-        >
-          {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
+        {/* Escritorio: desplegable de Informes */}
+        {panel === "informes" && grupos.length > 0 && (
+          <div
+            ref={panelInformesRef}
+            className="nav-panel-informes"
+            style={{ left: posInformes.left, top: posInformes.top }}
+          >
+            {grupos.map((g) => (
+              <div key={g.titulo} className="nav-grupo">
+                <div className="nav-grupo-titulo">{g.titulo}</div>
+                {g.items.map((i) => (
+                  <button
+                    key={i.key}
+                    type="button"
+                    onClick={() => irA(i.key)}
+                    className={`nav-subitem${pagina === i.key ? " nav-subitem-activo" : ""}`}
+                  >
+                    {i.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
-        <div className="nav-wrap" ref={usuarioRef}>
+        {mostrarAyuda && <AyudaModal onClose={() => setMostrarAyuda(false)} />}
+      </nav>
+
+      {/* Tablet y celular: barra inferior con ícono y nombre de cada sección */}
+      <nav className="nav-inferior" aria-label="Navegación principal">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          // Con la hoja de Informes abierta, solo "Informes" queda resaltado
+          const activo = pagina === item.key && !hoja;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`nav-inf-item${activo ? " nav-inf-item-activo" : ""}`}
+              onClick={() => irA(item.key)}
+              aria-current={activo ? "page" : undefined}
+            >
+              <span className="nav-inf-icono">
+                <Icon size={21} />
+                {item.badge > 0 && (
+                  <span className="nav-inf-badge">{item.badge > 99 ? "99+" : item.badge}</span>
+                )}
+              </span>
+              <span className="nav-inf-texto">{item.label}</span>
+            </button>
+          );
+        })}
+
+        {grupos.length > 0 && (
           <button
             type="button"
-            className="nav-usuario"
-            onClick={() => alternarPanel("usuario")}
+            className={`nav-inf-item${informesActivo || hoja ? " nav-inf-item-activo" : ""}`}
+            onClick={alternarHoja}
+            aria-expanded={hoja}
             aria-haspopup="menu"
-            aria-expanded={panel === "usuario"}
-            title="Tu cuenta"
           >
-            <span className="nav-avatar">{iniciales(perfil?.nombre)}</span>
-            <span className="nav-usuario-texto">
-              <span className="nav-usuario-nombre">{perfil?.nombre}</span>
-              <span className="nav-usuario-rol">{etiquetaRol(perfil?.rol)}</span>
+            <span className="nav-inf-icono">
+              <MoreHorizontal size={21} />
             </span>
-            <ChevronDown size={14} className="nav-usuario-flecha" />
+            <span className="nav-inf-texto">{ETIQUETA_MAS}</span>
           </button>
+        )}
+      </nav>
 
-          {panel === "usuario" && (
-            <div className="nav-flotante nav-flotante-usuario" role="menu">
-              <div className="nav-mu-cab">
-                <div className="nav-mu-nombre">{perfil?.nombre}</div>
-                <div className="nav-mu-rol">{etiquetaRol(perfil?.rol)}</div>
+      {/* Hoja de Informes: sube desde la barra inferior */}
+      {hoja && grupos.length > 0 && (
+        <>
+          <div className="nav-hoja-fondo" onClick={() => setHoja(false)} />
+          <div className="nav-hoja" role="menu" aria-label={ETIQUETA_MAS}>
+            {grupos.map((g) => (
+              <div key={g.titulo} className="nav-hoja-grupo">
+                <div className="nav-hoja-titulo">{g.titulo}</div>
+                {g.items.map((i) => {
+                  const Icon = ICONO_INFORME[i.key] || BarChart3;
+                  const activo = pagina === i.key;
+                  return (
+                    <button
+                      key={i.key}
+                      type="button"
+                      role="menuitem"
+                      className={`nav-hoja-item${activo ? " nav-hoja-item-activo" : ""}`}
+                      onClick={() => irA(i.key)}
+                    >
+                      <span className="nav-hoja-icono">
+                        <Icon size={17} />
+                      </span>
+                      {i.label}
+                    </button>
+                  );
+                })}
               </div>
-
-              <div className="nav-mu-switch">
-                <div className="nav-mu-switch-texto">
-                  <span className="nav-mu-texto">Avisos</span>
-                  <small>
-                    {avisosSoportados
-                      ? "Te avisa de lo que pide atención cuando estás en otra pestaña"
-                      : "Este navegador no permite avisos"}
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={avisosActivos}
-                  aria-label="Activar avisos"
-                  className={`nav-switch${avisosActivos ? " nav-switch-on" : ""}`}
-                  onClick={cambiarAvisos}
-                  disabled={!avisosSoportados}
-                >
-                  <span className="nav-switch-bolita" />
-                </button>
-              </div>
-              {mensajeAvisos && <div className="nav-mu-aviso">{mensajeAvisos}</div>}
-
-              <div className="nav-mu-separador" />
-              <button type="button" role="menuitem" className="nav-mu-item" onClick={abrirAyuda}>
-                <HelpCircle size={16} />
-                <span className="nav-mu-texto">Ayuda</span>
-              </button>
-              <button type="button" role="menuitem" className="nav-mu-item nav-mu-peligro" onClick={logout}>
-                <LogOut size={16} />
-                <span className="nav-mu-texto">Cerrar sesión</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Escritorio: desplegable de Informes */}
-      {panel === "informes" && grupos.length > 0 && (
-        <div
-          ref={panelInformesRef}
-          className="nav-panel-informes"
-          style={{ left: posInformes.left, top: posInformes.top }}
-        >
-          {grupos.map((g) => (
-            <div key={g.titulo} className="nav-grupo">
-              <div className="nav-grupo-titulo">{g.titulo}</div>
-              {g.items.map((i) => (
-                <button
-                  key={i.key}
-                  type="button"
-                  onClick={() => irA(i.key)}
-                  className={`nav-subitem${pagina === i.key ? " nav-subitem-activo" : ""}`}
-                >
-                  {i.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
-
-      {/* Tablet y celular: cajón con todas las opciones de navegación */}
-      {cajonAbierto && (
-        <div className="nav-cajon">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => irA(item.key)}
-                className={`nav-cajon-item${pagina === item.key ? " nav-cajon-item-activo" : ""}`}
-              >
-                <Icon size={18} />
-                {item.label}
-                {item.badge > 0 && <span className="nav-badge">{item.badge}</span>}
-              </button>
-            );
-          })}
-
-          {grupos.map((g) => (
-            <div key={g.titulo}>
-              <div className="nav-cajon-grupo-titulo">Informes · {g.titulo}</div>
-              {g.items.map((i) => (
-                <button
-                  key={i.key}
-                  type="button"
-                  onClick={() => irA(i.key)}
-                  className={`nav-cajon-item${pagina === i.key ? " nav-cajon-item-activo" : ""}`}
-                >
-                  <BarChart3 size={18} />
-                  {i.label}
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {mostrarAyuda && <AyudaModal onClose={() => setMostrarAyuda(false)} />}
-    </nav>
+    </>
   );
 }

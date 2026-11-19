@@ -352,7 +352,7 @@ export default function MetricasView() {
                       </>
                     ) : (
                       <>
-                        <Download size={15} /> Excel del día
+                        <Download size={15} /> Exportar
                       </>
                     )}
                   </button>

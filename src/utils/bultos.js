@@ -41,8 +41,19 @@ export const ESTANTERIAS = [1, 2, 3].flatMap((fila) =>
 // Playa: palets P1 a P6
 export const PALETS = ["P1", "P2", "P3", "P4", "P5", "P6"];
 
+// Ubicaciones especiales: no exigen cargar bultos
+export const UBIC_MOSTRADOR = "MOSTRADOR";
+export const UBIC_PALET_COMPLETO = "PALET COMPLETO";
+export const UBICACIONES_ESPECIALES = [UBIC_MOSTRADOR, UBIC_PALET_COMPLETO];
+export const esUbicacionEspecial = (u) => UBICACIONES_ESPECIALES.includes(u);
+
+// "Palet completo" se guarda como un bulto aparte (no aparece en la grilla de categorías)
+export const CATEGORIA_PALET_COMPLETO = "palet_completo";
+
 export const etiquetaCategoria = (clave) =>
-  CATEGORIAS_BULTO.find((c) => c.clave === clave)?.etiqueta || clave;
+  clave === CATEGORIA_PALET_COMPLETO
+    ? "Palet completo"
+    : CATEGORIAS_BULTO.find((c) => c.clave === clave)?.etiqueta || clave;
 
 export const ordenCategoria = (clave) => {
   const i = CATEGORIAS_BULTO.findIndex((c) => c.clave === clave);

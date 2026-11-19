@@ -7,12 +7,13 @@ import { limpiarCliente } from "../../utils/ordenar";
 // Columnas con ancho proporcional. La tabla ocupa todo el ancho sin scroll horizontal.
 // En celular se oculta "Vendedor" para que entren las demás.
 const COLUMNAS = [
-  { key: "numero", label: "Pedido", ancho: 11, clase: "" },
-  { key: "cliente", label: "Cliente", ancho: 33, clase: "" },
-  { key: "vendedor", label: "Vendedor", ancho: 13, clase: "mp-col-vend" },
-  { key: "entrega", label: "Entrega", ancho: 13, clase: "" },
-  { key: "monto", label: "Monto", ancho: 12, derecha: true, clase: "" },
-  { key: "estado", label: "Estado", ancho: 18, clase: "" },
+  { key: "numero", label: "Pedido", ancho: 10, clase: "" },
+  { key: "cliente", label: "Cliente", ancho: 27, clase: "" },
+  { key: "vendedor", label: "Vendedor", ancho: 12, clase: "mp-col-vend" },
+  { key: "comentario", label: "Comentario", ancho: 19, clase: "mp-col-com" },
+  { key: "entrega", label: "Entrega", ancho: 12, clase: "" },
+  { key: "monto", label: "Monto", ancho: 11, derecha: true, clase: "" },
+  { key: "estado", label: "Estado", ancho: 16, clase: "" },
 ];
 const TOTAL_ANCHO = COLUMNAS.reduce((acc, c) => acc + c.ancho, 0);
 
@@ -28,8 +29,11 @@ const CSS = `
 .mp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; }
 .mp-tab { display: inline-flex; align-items: center; }
 .mp-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mp-sub-com { display: none; }
 
 @media (max-width: 640px) {
+  .mp-col-com { display: none !important; }
+  .mp-sub-com { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
   .mp-tabs { display: grid !important; grid-template-columns: 1fr 1fr; gap: 4px; overflow: visible !important; border-bottom: none; margin-bottom: 10px; }
   .mp-tab { display: inline-flex !important; align-items: center; justify-content: center; flex-wrap: wrap; white-space: normal !important; text-align: center; padding: 8px 6px !important; font-size: 12px !important; line-height: 1.25; }
   .mp-tab span { margin-left: 6px !important; padding: 1px 6px !important; font-size: 10.5px !important; }
@@ -57,6 +61,8 @@ function valorColumna(key, p, usuariosMap) {
       return limpiarCliente(p.cliente_nombre).toLowerCase();
     case "vendedor":
       return (usuariosMap[p.vendedor_id]?.nombre || "").toLowerCase();
+    case "comentario":
+      return (p.observaciones || "").toLowerCase();
     case "entrega":
       return tiempo(p.entregado_at);
     case "monto":
@@ -75,7 +81,10 @@ function ordenPorDefecto(lista, pestana) {
   return [...lista].sort((a, b) => fecha(b) - fecha(a));
 }
 
-export default function TablaMisPedidos({ pedidos, usuariosMap, orden, onOrdenar, onSelect }) {
+// respetarOrden: true cuando la lista ya viene ordenada por el selector "Ordenar" de la pantalla.
+// En ese caso no se aplica el orden por defecto de la pestaña. El orden por título de columna
+// (orden) sigue mandando sobre todo cuando está activo.
+export default function TablaMisPedidos({ pedidos, usuariosMap, orden, onOrdenar, onSelect, respetarOrden = false }) {
   const [pestana, setPestana] = useState("para_armar");
 
   const conteos = useMemo(
@@ -84,7 +93,8 @@ export default function TablaMisPedidos({ pedidos, usuariosMap, orden, onOrdenar
   );
 
   const filas = useMemo(() => {
-    let lista = ordenPorDefecto(pedidos.filter(enGrupo[pestana]), pestana);
+    const delGrupo = pedidos.filter(enGrupo[pestana]);
+    let lista = respetarOrden ? delGrupo : ordenPorDefecto(delGrupo, pestana);
     if (orden?.col) {
       lista = [...lista].sort((a, b) => {
         const va = valorColumna(orden.col, a, usuariosMap);
@@ -96,7 +106,7 @@ export default function TablaMisPedidos({ pedidos, usuariosMap, orden, onOrdenar
       });
     }
     return lista;
-  }, [pedidos, pestana, usuariosMap, orden]);
+  }, [pedidos, pestana, usuariosMap, orden, respetarOrden]);
 
   return (
     <div>
@@ -218,8 +228,18 @@ function Fila({ pedido: p, usuariosMap, onSelect }) {
   return (
     <tr onClick={() => onSelect(p)} style={{ cursor: "pointer" }}>
       <td style={{ ...celda, fontWeight: 700, color: "var(--text-muted)" }}>#{p.numero_pedido}</td>
-      <td style={{ ...celda, fontWeight: 600 }} title={cliente}>{cliente}</td>
+      <td style={{ ...celda, fontWeight: 600 }} title={cliente}>
+        {cliente}
+        {p.observaciones && <div className="mp-sub-com" title={p.observaciones}>💬 {p.observaciones}</div>}
+      </td>
       <td className="mp-col-vend" style={celda} title={vendedor}>{vendedor}</td>
+      <td
+        className="mp-col-com"
+        style={{ ...celda, color: p.observaciones ? "var(--text-secondary)" : "var(--text-muted)" }}
+        title={p.observaciones || ""}
+      >
+        {p.observaciones || "—"}
+      </td>
       <td style={celda}>{p.entregado_at ? formatearFechaHora(p.entregado_at) : "—"}</td>
       <td style={{ ...celda, textAlign: "right", fontWeight: 700 }}>
         {p.monto != null ? formatearMonto(p.monto) : "—"}

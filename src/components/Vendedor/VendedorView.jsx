@@ -165,6 +165,10 @@ export default function VendedorView({ busqueda }) {
     ordenarLista(todosCombinadosBase, orden, usuariosMap) ||
     ordenarLista(todosCombinadosBase, "fecha_desc");
 
+  // Vista lista: el selector "Ordenar" también manda. Con "Prioridad" (null) la tabla
+  // usa su orden propio de cada pestaña.
+  const baseTabla = ordenarLista(base, orden, usuariosMap);
+
   const columnasVisibles =
     grupo === "todos"
       ? [
@@ -264,7 +268,11 @@ export default function VendedorView({ busqueda }) {
           className="input mp-orden"
           style={{ width: "auto" }}
           value={orden}
-          onChange={(e) => setOrden(e.target.value)}
+          onChange={(e) => {
+            setOrden(e.target.value);
+            // Al elegir un orden del selector se anula el orden por título de columna
+            setOrdenTabla(null);
+          }}
         >
           {OPCIONES_ORDEN.map((o) => (
             <option key={o.value} value={o.value}>
@@ -305,7 +313,8 @@ export default function VendedorView({ busqueda }) {
         </div>
       ) : vista === "lista" ? (
         <TablaMisPedidos
-          pedidos={base}
+          pedidos={baseTabla || base}
+          respetarOrden={!!baseTabla}
           usuariosMap={usuariosMap}
           orden={ordenTabla}
           onOrdenar={(key) => {
@@ -508,7 +517,6 @@ function TarjetaPedido({ pedido, cliente, vendedor, esMio, onClick }) {
         <span style={styles.chip}>
           {pedido.pago === "paga_ahora" ? "💵 Paga ahora" : "🔖 Solo retira"}
         </span>
-        {pedido.facturado && <span style={styles.chip}>🧾 Facturado</span>}
       </div>
       <div
         style={{

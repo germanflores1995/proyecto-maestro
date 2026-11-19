@@ -18,13 +18,22 @@ export const ESTADOS = {
     priority: 2,
     descripcion: "Cliente en camino, próximo a retirar",
   },
+  uber_didi: {
+    key: "uber_didi",
+    label: "Uber/Didi",
+    icono: "🚕",
+    color: "var(--st-uber-didi, #7c3aed)",
+    bg: "var(--st-uber-didi-bg, rgba(124, 58, 237, 0.14))",
+    priority: 3,
+    descripcion: "Envío por Uber/Didi: preparar con prioridad",
+  },
   viene_hoy: {
     key: "viene_hoy",
     label: "Viene hoy",
     icono: "📅",
     color: "var(--st-viene-hoy)",
     bg: "var(--st-viene-hoy-bg)",
-    priority: 3,
+    priority: 4,
     descripcion: "Confirmado que viene hoy",
   },
   retira_manana: {
@@ -33,7 +42,7 @@ export const ESTADOS = {
     icono: "📆",
     color: "var(--st-retira-manana)",
     bg: "var(--st-retira-manana-bg)",
-    priority: 4,
+    priority: 5,
     descripcion: "Confirmado para mañana",
   },
   listo_para_entregar: {
@@ -42,7 +51,7 @@ export const ESTADOS = {
     icono: "✅",
     color: "var(--st-listo)",
     bg: "var(--st-listo-bg)",
-    priority: 5,
+    priority: 6,
     descripcion: "Expedición controló el pedido",
   },
   retira_otro_dia: {
@@ -51,7 +60,7 @@ export const ESTADOS = {
     icono: "📋",
     color: "var(--st-retira-otro)",
     bg: "var(--st-retira-otro-bg)",
-    priority: 6,
+    priority: 7,
     descripcion: "Sin fecha definida",
   },
   entregado: {
@@ -60,7 +69,7 @@ export const ESTADOS = {
     icono: "📦",
     color: "var(--st-entregado)",
     bg: "var(--st-entregado-bg)",
-    priority: 7,
+    priority: 8,
     descripcion: "Retirado por el cliente",
   },
   cancelado: {
@@ -69,7 +78,7 @@ export const ESTADOS = {
     icono: "❌",
     color: "#EF4444",
     bg: "rgba(239, 68, 68, 0.12)",
-    priority: 8,
+    priority: 9,
     descripcion: "Pedido cancelado",
   },
 };
@@ -78,6 +87,7 @@ export const ESTADOS = {
 export const ESTADOS_VENDEDOR = [
   "en_espera",
   "en_camino",
+  "uber_didi",
   "viene_hoy",
   "retira_manana",
   "retira_otro_dia",

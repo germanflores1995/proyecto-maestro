@@ -59,15 +59,21 @@ export default function FormularioPedido({ onClose, onSuccess }) {
 
   const [estado, setEstado] = useState("viene_hoy");
   const [pago, setPago] = useState("solo_retira");
-  const [facturado, setFacturado] = useState(false);
   const [observaciones, setObservaciones] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [horaDesde, setHoraDesde] = useState(null);
 
-  const estadosDisponibles = puedeGestionarPedidos
-    ? Object.keys(ESTADOS).filter((k) => k !== "entregado")
-    : ESTADOS_VENDEDOR;
+  // Mismos estados, orden y restricciones que "Cambiar estado" del detalle del pedido:
+  // Ventas elige entre los suyos; Expedición/admin, todos menos entregado, cancelado y
+  // listo para entregar (ese pide ubicación y bultos, y se hace desde el detalle).
+  const estadosDisponibles = (
+    puedeGestionarPedidos
+      ? Object.keys(ESTADOS).filter(
+          (k) => !["entregado", "cancelado", "listo_para_entregar"].includes(k),
+        )
+      : ESTADOS_VENDEDOR
+  ).filter((k) => ESTADOS[k]);
   const horarios = horariosDisponibles(estado);
 
   const buscarPedido = async () => {
@@ -155,7 +161,7 @@ export default function FormularioPedido({ onClose, onSuccess }) {
           vendedor_id: perfil.id,
           estado,
           pago,
-          facturado,
+          facturado: false, // ya no se pide en pantalla; la columna de la base no se toca
           observaciones: observaciones.trim() || null,
           hora_desde: horarios.aplica ? horaDesde : null,
           monto: Number(seleccionado.monto),
@@ -509,25 +515,45 @@ export default function FormularioPedido({ onClose, onSuccess }) {
 
           <div className="form-group">
             <label className="form-label">Estado inicial</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 8,
+              }}
+            >
               {estadosDisponibles.map((key) => {
                 const e = ESTADOS[key];
                 const activo = estado === key;
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => {
                       setEstado(key);
                       setHoraDesde(null);
                     }}
                     style={{
-                      padding: "6px 12px",
-                      borderRadius: 7,
+                      padding: "10px 8px",
+                      borderRadius: 8,
                       fontSize: 12.5,
-                      fontWeight: 600,
-                      border: `1px solid ${activo ? e.color : "var(--border)"}`,
-                      background: activo ? e.bg : "transparent",
-                      color: activo ? e.color : "var(--text-secondary)",
+                      fontWeight: activo ? 700 : 600,
+                      border: `1px solid ${activo ? e.color : "transparent"}`,
+                      boxShadow: activo ? `inset 0 0 0 1px ${e.color}` : "none",
+                      background: e.bg,
+                      color: e.color,
+                      opacity: activo ? 1 : 0.6,
+                      textAlign: "center",
+                      transition: "transform 0.12s, filter 0.12s, opacity 0.12s",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(ev) => {
+                      ev.currentTarget.style.filter = "brightness(1.25)";
+                      ev.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(ev) => {
+                      ev.currentTarget.style.filter = "none";
+                      ev.currentTarget.style.transform = "none";
                     }}
                   >
                     {e.icono} {e.label}
@@ -643,42 +669,6 @@ export default function FormularioPedido({ onClose, onSuccess }) {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="form-group">
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                cursor: "pointer",
-              }}
-            >
-              <button
-                type="button"
-                className="toggle"
-                onClick={() => setFacturado((f) => !f)}
-                style={{
-                  background: facturado
-                    ? "var(--primary)"
-                    : "var(--border-strong)",
-                }}
-              >
-                <span
-                  className="toggle-knob"
-                  style={{ left: facturado ? 19 : 2 }}
-                />
-              </button>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: "var(--text-secondary)",
-                  fontWeight: 500,
-                }}
-              >
-                🧾 Pedido facturado
-              </span>
-            </label>
           </div>
 
           <div className="form-group">

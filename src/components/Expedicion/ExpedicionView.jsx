@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   LayoutGrid,
   List as ListIcon,
@@ -24,6 +24,8 @@ import {
 import DetallePedido from "../Pedidos/DetallePedido";
 import ExportarEntregasModal from "./ExportarEntregasModal";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../lib/supabase";
+import { etiquetaCategoria, ordenCategoria, esUbicacionEspecial } from "../../utils/bultos";
 import { ordenarConHorario, formatearHoraDesde } from "../../utils/horarios";
 import { exportarEntregadosHoy } from "../../lib/exportExcel";
 import {
@@ -39,6 +41,9 @@ const CSS = `
 .exp-kpis { display: flex; gap: 12px; flex-wrap: wrap; }
 .exp-acciones { display: flex; gap: 12px; flex-wrap: wrap; }
 .exp-kpi { padding: 11px 18px; min-width: 120px; }
+.exp-kpi-click { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+.exp-kpi-click:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.exp-kpi-click:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .exp-kpi-etiqueta { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px; }
 .exp-kpi-valor { font-family: Montserrat, sans-serif; font-size: 20px; font-weight: 800; color: var(--primary); }
 
@@ -55,6 +60,9 @@ const CSS = `
 .exp-num { font-weight: 700; font-size: 13.5px; }
 .exp-nombre { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exp-sub { font-size: 11.5px; color: var(--text-muted); }
+.exp-listo { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--st-listo-bg, rgba(26,157,90,0.12)); display: flex; flex-direction: column; gap: 3px; }
+.exp-listo-ubic { font-size: 13.5px; font-weight: 800; color: var(--st-listo, #1a9d5a); }
+.exp-listo-bultos { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 
 @media (max-width: 640px) {
   .exp-pagina { padding: 12px 12px 40px !important; }
@@ -72,6 +80,7 @@ const CSS = `
   .exp-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-bottom: none; margin-bottom: 10px; }
   .exp-tab { justify-content: center; flex-wrap: wrap; padding: 8px 6px !important; font-size: 12.5px !important; text-align: center; border-bottom-width: 2px !important; }
   .exp-tab span { margin-left: 6px !important; padding: 0 6px !important; }
+  .exp-tabs .exp-tab:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
   .exp-filtros { gap: 8px; margin-bottom: 12px; }
   .exp-select { flex: 1 1 calc(50% - 4px) !important; width: auto !important; min-width: 0 !important; font-size: 13px !important; padding: 8px 10px !important; }
@@ -119,7 +128,8 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
   const [mostrarExportar, setMostrarExportar] = useState(false);
   const { puedeExportarExcel, perfil, esVendedor, esEncargadoVentas } =
     useAuth();
-  const esEncargadoVentasPuro = perfil?.rol === "encargado_ventas";
+  // Ventas (vendedores y encargado de ventas) no ve las entregas del día ni sus montos
+  const ocultaEntregas = esVendedor;
 
   const {
     pedidos,
@@ -170,6 +180,8 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
       );
     else if (tab === "listos")
       lista = lista.filter((p) => p.estado === "listo_para_entregar");
+    else if (tab === "entregados")
+      lista = lista.filter((p) => p.estado === "entregado" && esHoy(p.entregado_at));
     else if (filtroEstado === "activos") lista = lista.filter((p) => p.activo);
     else if (filtroEstado !== "todos")
       lista = lista.filter((p) => p.estado === filtroEstado);
@@ -189,7 +201,12 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
     }
 
     const ordenada = ordenarLista(lista, orden, usuariosMap);
-    lista = ordenada || ordenarConHorario(ordenarPorPrioridad(lista));
+    // Entregados hoy: por defecto, la entrega más reciente primero
+    lista =
+      ordenada ||
+      (tab === "entregados"
+        ? [...lista].sort((a, b) => new Date(b.entregado_at) - new Date(a.entregado_at))
+        : ordenarConHorario(ordenarPorPrioridad(lista)));
 
     return lista;
   }, [
@@ -204,6 +221,40 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
     usuariosMap,
   ]);
 
+  // Bultos de los pedidos listos (para mostrarlos en las tarjetas)
+  const [bultosPorPedido, setBultosPorPedido] = useState({});
+  const idsListos = useMemo(
+    () =>
+      pedidosVisibles
+        .filter((p) => p.estado === "listo_para_entregar")
+        .map((p) => p.id)
+        .sort()
+        .join(","),
+    [pedidosVisibles],
+  );
+  useEffect(() => {
+    if (!idsListos) {
+      setBultosPorPedido({});
+      return;
+    }
+    let vigente = true;
+    (async () => {
+      const { data } = await supabase
+        .from("pedido_bultos")
+        .select("pedido_id, categoria, cantidad")
+        .in("pedido_id", idsListos.split(","));
+      if (!vigente) return;
+      const mapa = {};
+      (data || []).forEach((b) => {
+        (mapa[b.pedido_id] = mapa[b.pedido_id] || []).push(b);
+      });
+      setBultosPorPedido(mapa);
+    })();
+    return () => {
+      vigente = false;
+    };
+  }, [idsListos]);
+
   const entregadosHoy = pedidosVisibles.filter(
     (p) => p.estado === "entregado" && esHoy(p.entregado_at),
   );
@@ -211,6 +262,13 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
     (acc, p) => acc + (p.monto || 0),
     0,
   );
+
+  // Tocar "Entregados hoy": va a la lista de entregas del día, sin filtros que la recorten
+  const verEntregadosHoy = () => {
+    setTab("entregados");
+    setFiltroVendedor("todos");
+    setFiltroFecha("todos");
+  };
 
   const handleExportar = () =>
     exportarEntregadosHoy(pedidos, clientesMap, usuariosMap);
@@ -243,9 +301,13 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
 
         <div className="exp-derecha">
           <div className="exp-kpis">
-            {!esEncargadoVentasPuro && (
+            {!ocultaEntregas && (
               <>
-                <KpiCard label="Entregados hoy" value={entregadosHoy.length} />
+                <KpiCard
+                  label="Entregados hoy"
+                  value={entregadosHoy.length}
+                  onClick={verEntregadosHoy}
+                />
                 <KpiCard label="Monto total" value={formatearMonto(montoTotalHoy)} />
               </>
             )}
@@ -273,6 +335,9 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
         {[
           { key: "armar", label: "Para armar", n: cantArmar, color: "var(--primary)", bg: "var(--primary-subtle)" },
           { key: "listos", label: "Listos para entregar", n: cantListos, color: "var(--st-listo, #1a9d5a)", bg: "var(--st-listo-bg, rgba(26,157,90,0.12))" },
+          ...(ocultaEntregas
+            ? []
+            : [{ key: "entregados", label: "Entregados hoy", n: entregadosHoy.length, color: "var(--st-entregado, #0d9488)", bg: "var(--st-entregado-bg, rgba(13,148,136,0.12))" }]),
         ].map((t) => {
           const activa = tab === t.key;
           return (
@@ -388,7 +453,9 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
               ? "No hay pedidos para armar"
               : tab === "listos"
                 ? "No hay pedidos listos para entregar"
-                : "No hay pedidos"}
+                : tab === "entregados"
+                  ? "Todavía no hay entregas hoy"
+                  : "No hay pedidos"}
           </p>
           <p style={{ fontSize: 12.5 }}>
             {busqueda ? "Probá con otra búsqueda o ajustá los filtros." : "Probá ajustando los filtros."}
@@ -410,6 +477,7 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
               pedido={p}
               cliente={clientesMap[p.cliente_id]}
               vendedor={usuariosMap[p.vendedor_id]}
+              bultos={bultosPorPedido[p.id]}
               onClick={() => setPedidoDetalle(p)}
             />
           ))}
@@ -436,7 +504,27 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
   );
 }
 
-function KpiCard({ label, value }) {
+function KpiCard({ label, value, onClick }) {
+  if (onClick) {
+    return (
+      <div
+        className="card exp-kpi exp-kpi-click"
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+          }
+        }}
+        title="Ver las entregas de hoy"
+      >
+        <div className="exp-kpi-etiqueta">{label}</div>
+        <div className="exp-kpi-valor">{value}</div>
+      </div>
+    );
+  }
   return (
     <div className="card exp-kpi">
       <div className="exp-kpi-etiqueta">{label}</div>
@@ -451,7 +539,7 @@ const COLUMNAS = [
   { key: "cliente", label: "Cliente / Vendedor", min: 150, def: 250 },
   { key: "estado", label: "Estado", min: 120, def: 200 },
   { key: "comentario", label: "Comentario", min: 110, def: 230 },
-  { key: "pago", label: "Pago / Fac.", min: 90, def: 120 },
+  { key: "pago", label: "Pago", min: 90, def: 120 },
   { key: "monto", label: "Monto", min: 90, def: 120, derecha: true },
 ];
 const ANCHOS_DEF = Object.fromEntries(COLUMNAS.map((c) => [c.key, c.def]));
@@ -534,7 +622,7 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
       case "comentario":
         return (p.observaciones || "").toLowerCase();
       case "pago":
-        return (p.pago || "") + (p.facturado ? "1" : "0");
+        return p.pago || "";
       case "monto":
         return Number(p.monto || 0);
       default:
@@ -636,7 +724,9 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
                 <div className="exp-col exp-c-orden" style={w("orden")}>
                   <div className="exp-num">#{p.numero_pedido}</div>
                   <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                    {formatearFechaHora(p.created_at)}
+                    {p.estado === "entregado" && p.entregado_at
+                      ? `Entregado ${formatearFechaHora(p.entregado_at)}`
+                      : formatearFechaHora(p.created_at)}
                   </div>
                 </div>
                 <div className="exp-col exp-c-cliente" style={{ ...w("cliente"), minWidth: 0 }}>
@@ -661,7 +751,7 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
                   >
                     {estado.icono} {estado.label}
                   </span>
-                  {p.hora_desde && (
+                  {p.hora_desde && p.estado !== "entregado" && (
                     <span
                       className="badge"
                       style={{
@@ -709,17 +799,6 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
                   >
                     {p.pago === "paga_ahora" ? "💵 PAGA AHORA" : "🔖 RETIRA"}
                   </span>
-                  <span
-                    style={{
-                      fontSize: 10.5,
-                      color: p.facturado
-                        ? "var(--primary)"
-                        : "var(--text-muted)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {p.facturado ? "🧾 Facturado" : "Sin facturar"}
-                  </span>
                 </div>
                 <div
                   className="exp-col exp-c-monto"
@@ -742,8 +821,18 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
   );
 }
 
-function TarjetaCompacta({ pedido, cliente, vendedor, onClick }) {
+function resumenBultos(bultos) {
+  if (!bultos?.length) return "";
+  return [...bultos]
+    .sort((a, b) => ordenCategoria(a.categoria) - ordenCategoria(b.categoria))
+    .map((b) => `${b.cantidad}× ${etiquetaCategoria(b.categoria)}`)
+    .join(" · ");
+}
+
+function TarjetaCompacta({ pedido, cliente, vendedor, bultos, onClick }) {
   const estado = ESTADOS[pedido.estado];
+  const esListo = pedido.estado === "listo_para_entregar";
+  const textoBultos = resumenBultos(bultos);
   return (
     <div
       onClick={onClick}
@@ -768,7 +857,7 @@ function TarjetaCompacta({ pedido, cliente, vendedor, onClick }) {
         >
           {estado.icono} {estado.label}
         </span>
-        {pedido.hora_desde && (
+        {pedido.hora_desde && pedido.estado !== "entregado" && (
           <span
             className="badge"
             style={{
@@ -806,8 +895,22 @@ function TarjetaCompacta({ pedido, cliente, vendedor, onClick }) {
           💬 {pedido.observaciones}
         </div>
       )}
+      {esListo && (
+        <div className="exp-listo">
+          <div className="exp-listo-ubic">
+            📍 {pedido.ubicacion_retiro || "Sin ubicación"}
+          </div>
+          {(textoBultos || !esUbicacionEspecial(pedido.ubicacion_retiro)) && (
+            <div className="exp-listo-bultos">
+              📦 {textoBultos || "Sin bultos cargados"}
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 }}>
-        {formatearFechaHora(pedido.created_at)}
+        {pedido.estado === "entregado" && pedido.entregado_at
+          ? `Entregado ${formatearFechaHora(pedido.entregado_at)}`
+          : formatearFechaHora(pedido.created_at)}
       </div>
     </div>
   );

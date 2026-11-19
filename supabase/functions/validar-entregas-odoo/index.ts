@@ -3,7 +3,7 @@
 //   { accion: "estado", numeros: ["S00123", ...] }  -> estado de los albaranes de salida (solo lectura)
 //   { accion: "validar", numero_pedido, dia }       -> valida el albarán si está listo; si no, lo deja pendiente
 // Solo admin y encargado de expedición. Nunca marca nada como validado si Odoo no lo confirma.
-// Secretos: ODOO_URL, ODOO_DB, ODOO_USER, ODOO_API_KEY (mismos que usa obtener-monto-odoo).
+// Secreto requerido: ODOO_API_KEY (igual que obtener-monto-odoo).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -23,10 +23,11 @@ const MAPA_CAMPOS: Record<string, { cantidad_hecha: string }> = {
   "18": { cantidad_hecha: "quantity" },
 };
 
-const ODOO_URL = Deno.env.get("ODOO_URL")!;
-const ODOO_DB = Deno.env.get("ODOO_DB")!;
-const ODOO_USER = Deno.env.get("ODOO_USER")!;
-const ODOO_API_KEY = Deno.env.get("ODOO_API_KEY")!;
+// Mismo patrón que obtener-monto-odoo: URL y DB hardcodeadas, solo la clave es un secreto.
+const ODOO_URL = "https://live.distribuidoramaestro.com";
+const ODOO_DB = "live";
+const ODOO_LOGIN = "expedicion";
+const ODOO_PASSWORD = Deno.env.get("ODOO_API_KEY")!;
 
 class ErrorOdoo extends Error {}
 
@@ -37,30 +38,36 @@ function json(cuerpo: unknown, status = 200) {
   });
 }
 
-// Llamada JSON-RPC cruda a Odoo
-async function rpc(service: string, method: string, args: unknown[]) {
-  const r = await fetch(`${ODOO_URL}/jsonrpc`, {
+// Llamada JSON-RPC cruda a Odoo (igual que obtener-monto-odoo)
+async function odooCall(service: string, method: string, args: unknown[]) {
+  const res = await fetch(`${ODOO_URL}/jsonrpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { service, method, args } }),
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "call",
+      params: { service, method, args },
+      id: Math.floor(Math.random() * 1000),
+    }),
   });
-  const j = await r.json();
-  if (j.error) throw new ErrorOdoo(j.error.data?.message || j.error.message || "Error de Odoo");
-  return j.result;
+  return res.json();
 }
 
 let uidCache: number | null = null;
 async function uid(): Promise<number> {
-  if (!uidCache) {
-    uidCache = await rpc("common", "authenticate", [ODOO_DB, ODOO_USER, ODOO_API_KEY, {}]);
-    if (!uidCache) throw new ErrorOdoo("No se pudo autenticar en Odoo");
-  }
-  return uidCache;
+  if (uidCache) return uidCache;
+  const authData = await odooCall("common", "login", [ODOO_DB, ODOO_LOGIN, ODOO_PASSWORD]);
+  const u = authData.result;
+  if (!u) throw new ErrorOdoo("No se pudo autenticar en Odoo");
+  uidCache = u;
+  return uidCache!;
 }
 
 // Llamada a un modelo (execute_kw)
 async function llamar(modelo: string, metodo: string, args: unknown[] = [], kwargs: Record<string, unknown> = {}) {
-  return rpc("object", "execute_kw", [ODOO_DB, await uid(), ODOO_API_KEY, modelo, metodo, args, kwargs]);
+  const data = await odooCall("object", "execute_kw", [ODOO_DB, await uid(), ODOO_PASSWORD, modelo, metodo, args, kwargs]);
+  if (data.error) throw new ErrorOdoo(data.error.data?.message || data.error.message || "Error de Odoo");
+  return data.result;
 }
 
 // Albaranes de salida de un conjunto de pedidos
@@ -84,10 +91,9 @@ async function registrarEstado(sb: any, ok: boolean, mensaje: string | null, ver
     .eq("id", 1);
 }
 
-// Guarda o actualiza la fila de un albarán (una por picking)
+// Guarda o actualiza la fila de un albarán (una por picking_id)
 async function guardarFila(sb: any, fila: Record<string, unknown>) {
-  const ahora = new Date().toISOString();
-  const datos = { ...fila, updated_at: ahora };
+  const datos = { ...fila, updated_at: new Date().toISOString() };
   if (fila.picking_id) {
     const { data } = await sb
       .from("validaciones_odoo")
@@ -158,7 +164,7 @@ async function validarPedido(sb: any, userId: string, numero: string, dia: strin
           const res = await llamar("stock.picking", "button_validate", [[alb.id]]);
 
           // Odoo puede pedir una confirmación extra (transferencia inmediata). Solo esa se confirma.
-          // Si pide crear un albarán de resto (entrega parcial), no se hace: queda para revisar a mano.
+          // Si pide otro wizard (ej. entrega parcial), no se hace: queda pendiente para revisar a mano.
           if (res && typeof res === "object" && res.res_model) {
             if (res.res_model === "stock.immediate.transfer") {
               const idAsistente = await llamar(res.res_model, "create", [{ pick_ids: [[6, 0, [alb.id]]] }], { context: res.context || {} });
@@ -169,7 +175,8 @@ async function validarPedido(sb: any, userId: string, numero: string, dia: strin
           }
 
           if (!motivo) {
-            const [ahora] = await albaranesDe([numero]).then((lista) => lista.filter((x) => x.id === alb.id));
+            const lista = await albaranesDe([numero]);
+            const ahora = lista.find((x) => x.id === alb.id);
             estadoFinal = ahora?.state || "desconocido";
             if (estadoFinal === "done") estado = "validado_odoo";
             else motivo = `Odoo no completó la validación (estado: ${estadoFinal})`;
@@ -178,7 +185,7 @@ async function validarPedido(sb: any, userId: string, numero: string, dia: strin
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      if (esErrorDeCampo(msg)) throw e; // lo maneja el handler general (integración)
+      if (esErrorDeCampo(msg)) throw e; // lo maneja el handler general (actualiza integracion_odoo_estado)
       motivo = `Error de Odoo: ${msg}`;
     }
 
@@ -220,7 +227,8 @@ Deno.serve(async (req) => {
 
   try {
     // 2) Versión de Odoo y mapa de campos
-    const version = String((await rpc("common", "version", []))?.server_version ?? "");
+    const verData = await odooCall("common", "version", []);
+    const version = String(verData.result?.server_version ?? "");
     const mayor = version.split(".")[0];
     const campos = MAPA_CAMPOS[mayor];
     if (!campos) {

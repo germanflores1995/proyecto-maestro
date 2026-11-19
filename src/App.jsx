@@ -71,7 +71,9 @@ function AppShell() {
     }
   }, [esExpedicion]);
 
-  if (loading) {
+  // La pantalla de carga completa solo aparece al abrir la app o iniciar sesión,
+  // nunca una vez que ya hay un usuario adentro.
+  if (loading && !perfil) {
     return (
       <div
         style={{
@@ -130,19 +132,7 @@ function AppShell() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      <Sidebar
-        pagina={pagina}
-        setPagina={cambiarPagina}
-        notifActivas={notifActivas}
-        onToggleNotif={solicitarNotificaciones}
-      />
-
-      {/* <Sidebar
-        pagina={pagina}
-        setPagina={cambiarPagina}
-        abierto={sidebarAbierto}
-        onCerrar={() => setSidebarAbierto(false)}
-      /> */}
+      <Sidebar pagina={pagina} setPagina={cambiarPagina} />
 
       <div
         className="app-content"
@@ -163,7 +153,11 @@ function AppShell() {
 
         <main style={{ flex: 1 }}>
           {pagina === "vendedor" && (
-            <VendedorView busqueda={busqueda} refrescarKey={refrescarKey} />
+            <VendedorView
+              busqueda={busqueda}
+              refrescarKey={refrescarKey}
+              onNuevoPedido={() => setMostrarFormulario(true)}
+            />
           )}
           {pagina === "expedicion" && (
             <ExpedicionView

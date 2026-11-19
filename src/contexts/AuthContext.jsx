@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const AuthContext = createContext(null);
@@ -9,6 +9,10 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Usuario cuyo perfil ya está cargado (o cargándose). Sirve para no recargar
+  // toda la app cuando Supabase repite el aviso de sesión al volver a la pestaña.
+  const perfilIdRef = useRef(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -18,22 +22,33 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange((event, nuevaSesion) => {
+      // Misma sesión: no se vuelve a renderizar nada si solo cambió el token
+      setSession((prev) =>
+        prev?.access_token === nuevaSesion?.access_token ? prev : nuevaSesion,
+      );
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-        if (session) cargarPerfil(session.user.id);
-        else setLoading(false);
+        if (!nuevaSesion) {
+          setLoading(false);
+        } else if (perfilIdRef.current !== nuevaSesion.user.id) {
+          // Usuario nuevo: se carga su perfil (fuera del callback, como pide supabase-js)
+          setTimeout(() => cargarPerfil(nuevaSesion.user.id), 0);
+        }
+        // Si es el mismo usuario (volviste a la pestaña): no se hace nada
       } else if (event === "SIGNED_OUT") {
+        perfilIdRef.current = null;
         setPerfil(null);
         setLoading(false);
       }
-      // Ignoramos TOKEN_REFRESHED para no resetear la app innecesariamente
+      // TOKEN_REFRESHED y demás: se ignoran para no resetear la app
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   async function cargarPerfil(userId) {
+    if (perfilIdRef.current === userId) return; // ya cargado o en curso
+    perfilIdRef.current = userId;
     setLoading(true);
     setError(null);
     const { data, error } = await supabase
@@ -43,11 +58,13 @@ export function AuthProvider({ children }) {
       .single();
 
     if (error || !data) {
+      perfilIdRef.current = null;
       setError(
         "Tu usuario no tiene un perfil asignado. Contactá al administrador.",
       );
       setPerfil(null);
     } else if (!data.activo) {
+      perfilIdRef.current = null;
       setError("Tu usuario está desactivado. Contactá al administrador.");
       setPerfil(null);
     } else {
@@ -66,6 +83,7 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     await supabase.auth.signOut();
+    perfilIdRef.current = null;
     setPerfil(null);
   }
 

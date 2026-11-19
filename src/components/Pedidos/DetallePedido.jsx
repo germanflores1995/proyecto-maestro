@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { X, Clock, PackageCheck, XCircle } from "lucide-react";
+import { X, Clock, PackageCheck, XCircle, Undo2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { ESTADOS } from "../../utils/constants";
-import { formatearFechaHora, formatearMonto } from "../../utils/helpers";
+import { formatearFechaHora, formatearMonto, esHoy } from "../../utils/helpers";
 import { obtenerPedidoDeOdoo } from "../../lib/odoo";
 import { horariosDisponibles, formatearHoraDesde } from "../../utils/horarios";
 import PrepararEntrega from "./PrepararEntrega";
@@ -13,6 +13,7 @@ import ResumenPreparacion from "./ResumenPreparacion";
 const ESTADOS_VENTAS = [
   "en_espera",
   "en_camino",
+  "uber_didi",
   "viene_hoy",
   "retira_manana",
   "retira_otro_dia",
@@ -26,8 +27,14 @@ export default function DetallePedido({
   onActualizado,
   onEntregado,
 }) {
-  const { perfil, puedeGestionarPedidos, esVendedor, esEncargadoVentas } =
-    useAuth();
+  const {
+    perfil,
+    puedeGestionarPedidos,
+    esVendedor,
+    esEncargadoVentas,
+    esEncargadoExpedicion,
+    esAdmin,
+  } = useAuth();
   const [pedido, setPedido] = useState(pedidoInicial);
   const [historial, setHistorial] = useState([]);
   const [articulos, setArticulos] = useState([]);
@@ -37,6 +44,8 @@ export default function DetallePedido({
   const [entregando, setEntregando] = useState(false);
   const [confirmCancelar, setConfirmCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  const [confirmDeshacer, setConfirmDeshacer] = useState(false);
+  const [deshaciendo, setDeshaciendo] = useState(false);
   const [error, setError] = useState("");
   const [cambiandoHora, setCambiandoHora] = useState(false);
   const [cambiandoPago, setCambiandoPago] = useState(false);
@@ -61,7 +70,7 @@ export default function DetallePedido({
       .from("historial_pedidos")
       .select("*, usuario:usuarios(nombre)")
       .eq("pedido_id", pedido.id)
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false }); // lo último que se modificó, arriba
     setHistorial(data || []);
     setLoadingHist(false);
   };
@@ -255,15 +264,79 @@ export default function DetallePedido({
     }
   };
 
+  // Cancelar una entrega: el pedido vuelve al estado en que estaba antes de entregarse.
+  const deshacerEntrega = async () => {
+    setDeshaciendo(true);
+    setError("");
+    try {
+      // Estado previo = el que tenía en el último movimiento a "entregado"
+      const { data: movs } = await supabase
+        .from("historial_pedidos")
+        .select("estado_anterior, created_at")
+        .eq("pedido_id", pedido.id)
+        .eq("estado_nuevo", "entregado")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      let previo = movs?.[0]?.estado_anterior;
+      if (!previo || !ESTADOS[previo] || previo === "entregado" || previo === "cancelado") {
+        previo = "listo_para_entregar";
+      }
+
+      const { error: errUpd } = await supabase
+        .from("pedidos")
+        .update({
+          estado: previo,
+          activo: true,
+          entregado_at: null,
+          monto: null,
+          vendedor_odoo: null,
+        })
+        .eq("id", pedido.id);
+      if (errUpd) throw errUpd;
+
+      // Los artículos se vuelven a traer de Odoo si se entrega de nuevo
+      await supabase.from("pedido_articulos").delete().eq("pedido_id", pedido.id);
+
+      await supabase.from("historial_pedidos").insert({
+        pedido_id: pedido.id,
+        usuario_id: perfil.id,
+        estado_anterior: "entregado",
+        estado_nuevo: previo,
+        descripcion: `${perfil.nombre} canceló la entrega: vuelve a "${ESTADOS[previo]?.label}"`,
+      });
+
+      setPedido((p) => ({
+        ...p,
+        estado: previo,
+        activo: true,
+        entregado_at: null,
+        monto: null,
+        vendedor_odoo: null,
+      }));
+      setArticulos([]);
+      setConfirmDeshacer(false);
+      setDeshaciendo(false);
+      cargarHistorial();
+      onActualizado?.();
+    } catch (err) {
+      setError(err.message);
+      setDeshaciendo(false);
+    }
+  };
+
   const estadoActual = ESTADOS[pedido.estado] || ESTADOS.viene_hoy;
   const estadosBotones = (
     puedeGestionarPedidos
       ? Object.keys(ESTADOS).filter((k) => k !== "entregado")
       : ESTADOS_VENTAS
-  ).filter((k) => k !== pedido.estado);
+  ).filter((k) => k !== pedido.estado && ESTADOS[k]);
   const horarios = horariosDisponibles(pedido.estado);
   const pedidoFinalizado =
     pedido.estado === "entregado" || pedido.estado === "cancelado";
+  // Admin: cualquier día. Encargado de expedición: solo entregas de hoy.
+  const puedeDeshacerEntrega =
+    pedido.estado === "entregado" &&
+    (esAdmin || (esEncargadoExpedicion && esHoy(pedido.entregado_at)));
 
   return (
     <div
@@ -314,7 +387,7 @@ export default function DetallePedido({
             >
               {estadoActual.icono} {estadoActual.label}
             </span>
-            {pedido.hora_desde && (
+            {pedido.hora_desde && pedido.estado !== "entregado" && (
               <span
                 className="badge"
                 style={{
@@ -407,7 +480,6 @@ export default function DetallePedido({
                 }
               />
             )}
-            <Info label="Facturado" value={pedido.facturado ? "🧾 Sí" : "No"} />
             <Info
               label="Cargado"
               value={formatearFechaHora(pedido.created_at)}
@@ -564,7 +636,7 @@ export default function DetallePedido({
                 }}
               >
                 {estadosBotones
-                  .filter((k) => k !== "cancelado")
+                  .filter((k) => k !== "cancelado" && k !== "listo_para_entregar")
                   .map((key) => {
                     const e = ESTADOS[key];
                     return (
@@ -598,6 +670,35 @@ export default function DetallePedido({
                     );
                   })}
               </div>
+
+              {/* Listo para entregar: a todo el ancho, en azul para distinguirlo de "Entregado" (verde) */}
+              {estadosBotones.includes("listo_para_entregar") && (
+                <button
+                  onClick={() => cambiarEstado("listo_para_entregar")}
+                  disabled={loadingEstado}
+                  style={{
+                    width: "100%",
+                    marginTop: 8,
+                    padding: 12,
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    border: "1px solid var(--primary)",
+                    background: "var(--primary-subtle)",
+                    color: "var(--primary)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    transition: "filter 0.12s",
+                  }}
+                  onMouseEnter={(ev) => (ev.currentTarget.style.filter = "brightness(1.15)")}
+                  onMouseLeave={(ev) => (ev.currentTarget.style.filter = "none")}
+                >
+                  {ESTADOS.listo_para_entregar.icono} {ESTADOS.listo_para_entregar.label}
+                </button>
+              )}
 
               {/* Botón / confirmación de cancelar pedido */}
               {puedeGestionarPedidos && (
@@ -740,6 +841,80 @@ export default function DetallePedido({
                           onClick={marcarEntregado}
                         >
                           ✅ Confirmar
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cancelar entrega — solo pedidos entregados */}
+          {puedeDeshacerEntrega && (
+            <div style={{ marginBottom: 4 }}>
+              {!confirmDeshacer ? (
+                <button
+                  onClick={() => setConfirmDeshacer(true)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    border: "1px solid #EF4444",
+                    background: "transparent",
+                    color: "#EF4444",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Undo2 size={15} /> Cancelar entrega
+                </button>
+              ) : (
+                <div style={styles.confirmBoxDanger}>
+                  {deshaciendo ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        color: "var(--text-secondary)",
+                        fontSize: 13,
+                      }}
+                    >
+                      <span className="spinner" /> Cancelando entrega...
+                    </div>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 13, color: "#EF4444", fontWeight: 600 }}>
+                        ¿Cancelar la entrega? El pedido vuelve a su estado anterior.
+                      </span>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ padding: "5px 11px", fontSize: 12 }}
+                          onClick={() => setConfirmDeshacer(false)}
+                        >
+                          Volver
+                        </button>
+                        <button
+                          style={{
+                            padding: "5px 13px",
+                            fontSize: 12,
+                            borderRadius: 6,
+                            border: "none",
+                            background: "#EF4444",
+                            color: "#fff",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                          onClick={deshacerEntrega}
+                        >
+                          Sí, cancelar entrega
                         </button>
                       </div>
                     </>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { MapPin, Package } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { etiquetaCategoria, ordenCategoria } from "../../utils/bultos";
+import { etiquetaCategoria, ordenCategoria, esUbicacionEspecial } from "../../utils/bultos";
 
 // Qué se preparó para el pedido: ubicación y bultos. Para revisar al entregar.
 export default function ResumenPreparacion({ pedidoId }) {
@@ -59,7 +59,9 @@ export default function ResumenPreparacion({ pedidoId }) {
 
           {bultos.length === 0 ? (
             <p style={styles.vacio}>
-              Sin bultos cargados (pedido preparado antes de esta función).
+              {esUbicacionEspecial(ubicacion)
+                ? "Sin bultos cargados."
+                : "Sin bultos cargados (pedido preparado antes de esta función)."}
             </p>
           ) : (
             <>
