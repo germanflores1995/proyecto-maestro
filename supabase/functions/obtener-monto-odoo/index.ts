@@ -39,9 +39,9 @@ serve(async (req) => {
   }
 
   try {
-    const { numero_pedido } = await req.json();
+    const { numero_pedido, odoo_id } = await req.json();
 
-    if (!numero_pedido) {
+    if (!numero_pedido && !odoo_id) {
       return new Response(
         JSON.stringify({ error: "numero_pedido is required" }),
         {
@@ -74,16 +74,25 @@ serve(async (req) => {
       );
     }
 
-    // Paso 2: buscar el pedido usando el uid ya autenticado
-    const odooData = await odooCall("object", "execute_kw", [
-      ODOO_DB,
-      uid,
-      ODOO_PASSWORD,
-      "sale.order",
-      "search_read",
-      [[["name", "=", numero_pedido]]],
-      { fields: ["name", "amount_total", "partner_id"], limit: 1 },
-    ]);
+    // Paso 2: buscar el pedido usando el uid ya autenticado.
+    // Si tenemos el id interno de Odoo se busca por ese (no cambia aunque renombren el pedido);
+    // si no, o si no aparece por id, se busca por el número.
+    const buscar = (dominio: any[]) =>
+      odooCall("object", "execute_kw", [
+        ODOO_DB,
+        uid,
+        ODOO_PASSWORD,
+        "sale.order",
+        "search_read",
+        [dominio],
+        { fields: ["name", "amount_total", "partner_id"], limit: 1 },
+      ]);
+
+    let odooData: any = { result: [] };
+    if (odoo_id) odooData = await buscar([["id", "=", Number(odoo_id)]]);
+    if (!odooData.error && !odooData.result?.[0] && numero_pedido) {
+      odooData = await buscar([["name", "=", numero_pedido]]);
+    }
 
     console.log("Odoo response:", JSON.stringify(odooData));
 
@@ -108,6 +117,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
+        odoo_id: result.id,
         numero_pedido: result.name,
         monto: result.amount_total,
         cliente: result.partner_id[1] || "Desconocido",

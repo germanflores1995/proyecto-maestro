@@ -180,6 +180,7 @@ serve(async (req) => {
 
     const filas = r.result ?? [];
     const resultados = filas.slice(0, MAX_RESULTADOS).map((o: any) => ({
+      odoo_id: o.id, // id interno de Odoo: no cambia aunque le cambien el nombre al pedido
       numero_pedido: o.name,
       cliente: o.partner_id?.[1] ?? "Desconocido",
       monto: o.amount_total,

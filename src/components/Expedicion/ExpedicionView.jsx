@@ -26,7 +26,7 @@ import ExportarEntregasModal from "./ExportarEntregasModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { supabase } from "../../lib/supabase";
 import { etiquetaCategoria, ordenCategoria, esUbicacionEspecial } from "../../utils/bultos";
-import { ordenarConHorario, formatearHoraDesde } from "../../utils/horarios";
+import { ordenarConHorario, formatearHoraDesde, horaVigente } from "../../utils/horarios";
 import { exportarEntregadosHoy } from "../../lib/exportExcel";
 import {
   ordenarLista,
@@ -751,7 +751,7 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
                   >
                     {estado.icono} {estado.label}
                   </span>
-                  {p.hora_desde && p.estado !== "entregado" && (
+                  {horaVigente(p) && p.estado !== "entregado" && (
                     <span
                       className="badge"
                       style={{
@@ -759,7 +759,7 @@ function TablaPedidos({ pedidos, clientesMap, usuariosMap, miId, onSelect }) {
                         color: "var(--text-secondary)",
                       }}
                     >
-                      🕓 {formatearHoraDesde(p.hora_desde)}
+                      🕓 {formatearHoraDesde(horaVigente(p))}
                     </span>
                   )}
                 </div>
@@ -857,7 +857,7 @@ function TarjetaCompacta({ pedido, cliente, vendedor, bultos, onClick }) {
         >
           {estado.icono} {estado.label}
         </span>
-        {pedido.hora_desde && pedido.estado !== "entregado" && (
+        {horaVigente(pedido) && pedido.estado !== "entregado" && (
           <span
             className="badge"
             style={{
@@ -867,7 +867,7 @@ function TarjetaCompacta({ pedido, cliente, vendedor, bultos, onClick }) {
               fontSize: 9.5,
             }}
           >
-            🕓 {formatearHoraDesde(pedido.hora_desde)}
+            🕓 {formatearHoraDesde(horaVigente(pedido))}
           </span>
         )}
       </div>

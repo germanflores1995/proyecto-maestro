@@ -5,7 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { ESTADOS } from "../../utils/constants";
 import { formatearFechaHora, formatearMonto, esHoy } from "../../utils/helpers";
 import { obtenerPedidoDeOdoo } from "../../lib/odoo";
-import { horariosDisponibles, formatearHoraDesde } from "../../utils/horarios";
+import { horariosDisponibles, formatearHoraDesde, horaVigente, diaDeRetiro } from "../../utils/horarios";
 import PrepararEntrega from "./PrepararEntrega";
 import ResumenPreparacion from "./ResumenPreparacion";
 
@@ -96,7 +96,7 @@ export default function DetallePedido({
     try {
       const { error: err } = await supabase
         .from("pedidos")
-        .update({ estado: nuevoEstado, hora_desde: null })
+        .update({ estado: nuevoEstado, hora_desde: null, hora_desde_dia: null })
         .eq("id", pedido.id);
       if (err) throw err;
       await supabase.from("historial_pedidos").insert({
@@ -106,7 +106,7 @@ export default function DetallePedido({
         estado_nuevo: nuevoEstado,
         descripcion: `${perfil.nombre} cambió estado: "${ESTADOS[anterior]?.label}" → "${ESTADOS[nuevoEstado]?.label}"`,
       });
-      setPedido((p) => ({ ...p, estado: nuevoEstado, hora_desde: null }));
+      setPedido((p) => ({ ...p, estado: nuevoEstado, hora_desde: null, hora_desde_dia: null }));
       cargarHistorial();
       onActualizado?.();
     } catch (err) {
@@ -147,11 +147,12 @@ export default function DetallePedido({
     if (cambiandoHora) return;
     setCambiandoHora(true);
     setError("");
-    const anterior = pedido.hora_desde;
+    const anterior = horaVigente(pedido);
+    const nuevoDia = nuevaHora ? diaDeRetiro(pedido.estado) : null;
     try {
       const { error: err } = await supabase
         .from("pedidos")
-        .update({ hora_desde: nuevaHora })
+        .update({ hora_desde: nuevaHora, hora_desde_dia: nuevoDia })
         .eq("id", pedido.id);
       if (err) throw err;
       await supabase.from("historial_pedidos").insert({
@@ -161,7 +162,7 @@ export default function DetallePedido({
         estado_nuevo: pedido.estado,
         descripcion: `${perfil.nombre} cambió el horario: ${anterior ? formatearHoraDesde(anterior) : "sin horario"} → ${nuevaHora || "sin horario"}`,
       });
-      setPedido((p) => ({ ...p, hora_desde: nuevaHora }));
+      setPedido((p) => ({ ...p, hora_desde: nuevaHora, hora_desde_dia: nuevoDia }));
       cargarHistorial();
       onActualizado?.();
     } catch (err) {
@@ -175,13 +176,19 @@ export default function DetallePedido({
     setEntregando(true);
     setError("");
     try {
-      const datosOdoo = await obtenerPedidoDeOdoo(pedido.numero_pedido);
+      // Antes de entregar se revisa en Odoo el pedido (por su id interno, si lo tenemos):
+      // si le cambiaron el número (ej. de «presupuesto» al número definitivo), se actualiza acá.
+      const datosOdoo = await obtenerPedidoDeOdoo(pedido.numero_pedido, pedido.odoo_id);
       if (!datosOdoo || datosOdoo.monto == null) {
-        setError("No se pudo consultar el monto en Odoo, intentá de nuevo.");
+        setError(
+          `No se pudo consultar el pedido «${pedido.numero_pedido}» en Odoo. Puede ser un corte momentáneo (intentá de nuevo) o que le hayan cambiado el número en Odoo.`,
+        );
         setEntregando(false);
         return;
       }
       const { monto, articulos: arts } = datosOdoo;
+      const numeroActual = datosOdoo.numero_pedido || pedido.numero_pedido;
+      const numeroCambio = numeroActual !== pedido.numero_pedido;
       const ahora = new Date().toISOString();
 
       const { error: errUpd } = await supabase
@@ -191,17 +198,37 @@ export default function DetallePedido({
           entregado_at: ahora,
           activo: false,
           monto,
+          ...(numeroCambio ? { numero_pedido: numeroActual } : {}),
         })
         .eq("id", pedido.id);
       if (errUpd) throw errUpd;
+
+      if (numeroCambio) {
+        await supabase.from("historial_pedidos").insert({
+          pedido_id: pedido.id,
+          usuario_id: perfil.id,
+          estado_anterior: pedido.estado,
+          estado_nuevo: pedido.estado,
+          descripcion: `El número del pedido cambió en Odoo: ${pedido.numero_pedido} → ${numeroActual}`,
+        });
+      }
+
+      // Si el pedido todavía no tenía guardado el id de Odoo, se completa ahora (dato extra, no frena la entrega)
+      if (datosOdoo.odoo_id && !pedido.odoo_id) {
+        const { error: errId } = await supabase
+          .from("pedidos")
+          .update({ odoo_id: datosOdoo.odoo_id })
+          .eq("id", pedido.id);
+        if (errId) console.error("No se pudo guardar el id de Odoo:", errId.message);
+      }
 
       // Vendedor que cargó el pedido en Odoo, guardado aparte del vendedor de la app.
       // Si falla, la entrega igual queda registrada.
       try {
         const { data: vend } = await supabase.functions.invoke("obtener-vendedor-odoo", {
-          body: { numeros: [pedido.numero_pedido] },
+          body: { numeros: [numeroActual] },
         });
-        const nombreOdoo = vend?.vendedores?.[pedido.numero_pedido];
+        const nombreOdoo = vend?.vendedores?.[numeroActual];
         if (nombreOdoo) {
           await supabase
             .from("pedidos")
@@ -387,7 +414,7 @@ export default function DetallePedido({
             >
               {estadoActual.icono} {estadoActual.label}
             </span>
-            {pedido.hora_desde && pedido.estado !== "entregado" && (
+            {horaVigente(pedido) && pedido.estado !== "entregado" && (
               <span
                 className="badge"
                 style={{
@@ -396,7 +423,7 @@ export default function DetallePedido({
                   color: "var(--text-secondary)",
                 }}
               >
-                🕓 Desde las {formatearHoraDesde(pedido.hora_desde)}
+                🕓 Desde las {formatearHoraDesde(horaVigente(pedido))}
               </span>
             )}
           </div>
@@ -566,7 +593,7 @@ export default function DetallePedido({
                   Ya no se pueden asignar horarios para hoy.
                 </p>
               )}
-              {(!horarios.sinHorarios || pedido.hora_desde) && (
+              {(!horarios.sinHorarios || horaVigente(pedido)) && (
                 <div
                   style={{
                     display: "grid",
@@ -577,7 +604,7 @@ export default function DetallePedido({
                   {[null, ...horarios.horas].map((h) => {
                     const activo =
                       (h || null) ===
-                      (formatearHoraDesde(pedido.hora_desde) || null);
+                      (formatearHoraDesde(horaVigente(pedido)) || null);
                     return (
                       <button
                         key={h || "sin"}

@@ -59,6 +59,29 @@ export function horariosDisponibles(estado) {
   };
 }
 
+// Fecha (AAAA-MM-DD) en Argentina, hoy + n días
+export function fechaArgentina(n = 0) {
+  const hoy = new Date().toLocaleDateString("en-CA", { timeZone: TZ });
+  const [a, m, d] = hoy.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+// Para qué día es la hora que se elige según el estado:
+// «Viene hoy» → hoy; «Retira mañana» → mañana (sábado y domingo → lunes, igual que en horariosDisponibles).
+export function diaDeRetiro(estado) {
+  if (estado !== "retira_manana") return fechaArgentina(0);
+  const { dia } = ahoraArgentina();
+  return fechaArgentina(dia === 6 ? 2 : 1);
+}
+
+// La hora guardada del pedido, solo si todavía sirve: si fue elegida para un día que ya pasó
+// (ej. «viene hoy» de ayer que no vino), se ignora y el pedido queda sin hora.
+export function horaVigente(pedido) {
+  if (!pedido?.hora_desde) return null;
+  if (pedido.hora_desde_dia && pedido.hora_desde_dia < fechaArgentina(0)) return null;
+  return pedido.hora_desde;
+}
+
 export function formatearHoraDesde(valor) {
   return valor ? String(valor).slice(0, 5) : "";
 }
@@ -71,9 +94,9 @@ export function ordenarConHorario(lista) {
     while (j < lista.length && lista[j].estado === lista[i].estado) j++;
     const tramo = lista.slice(i, j);
     const conHora = tramo
-      .filter((p) => p.hora_desde)
-      .sort((a, b) => String(a.hora_desde).localeCompare(String(b.hora_desde)));
-    const sinHora = tramo.filter((p) => !p.hora_desde);
+      .filter((p) => horaVigente(p))
+      .sort((a, b) => String(horaVigente(a)).localeCompare(String(horaVigente(b))));
+    const sinHora = tramo.filter((p) => !horaVigente(p));
     resultado.push(...conHora, ...sinHora);
     i = j;
   }

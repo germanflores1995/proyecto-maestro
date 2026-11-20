@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { ESTADOS, ESTADOS_VENDEDOR } from "../../utils/constants";
 import { buscarPedidosOdoo } from "../../lib/odoo";
-import { horariosDisponibles } from "../../utils/horarios";
+import { horariosDisponibles, diaDeRetiro } from "../../utils/horarios";
 
 const TZ = "America/Argentina/Buenos_Aires";
 
@@ -94,9 +94,12 @@ export default function FormularioPedido({ onClose, onSuccess }) {
       return;
     }
 
-    // Marcar los que ya están cargados y activos en la app
+    // Marcar los que ya están cargados y activos en la app (por número o por id interno de Odoo,
+    // así también se detecta un pedido cargado con su nombre anterior)
     const numeros = res.resultados.map((r) => r.numero_pedido);
+    const ids = res.resultados.map((r) => r.odoo_id).filter(Boolean);
     let cargados = new Set();
+    let cargadosPorId = new Set();
     if (numeros.length > 0) {
       const { data } = await supabase
         .from("pedidos")
@@ -105,10 +108,18 @@ export default function FormularioPedido({ onClose, onSuccess }) {
         .eq("activo", true);
       cargados = new Set((data || []).map((d) => d.numero_pedido));
     }
+    if (ids.length > 0) {
+      const { data, error: errIds } = await supabase
+        .from("pedidos")
+        .select("odoo_id")
+        .in("odoo_id", ids)
+        .eq("activo", true);
+      if (!errIds) cargadosPorId = new Set((data || []).map((d) => d.odoo_id));
+    }
 
     const lista = res.resultados.map((r) => ({
       ...r,
-      yaCargado: cargados.has(r.numero_pedido),
+      yaCargado: cargados.has(r.numero_pedido) || (r.odoo_id && cargadosPorId.has(r.odoo_id)),
     }));
     setResultados(lista);
     setHayMas(!!res.hay_mas);
@@ -164,12 +175,23 @@ export default function FormularioPedido({ onClose, onSuccess }) {
           facturado: false, // ya no se pide en pantalla; la columna de la base no se toca
           observaciones: observaciones.trim() || null,
           hora_desde: horarios.aplica ? horaDesde : null,
+          hora_desde_dia: horarios.aplica && horaDesde ? diaDeRetiro(estado) : null,
           monto: Number(seleccionado.monto),
         })
         .select()
         .single();
 
       if (errPedido) throw errPedido;
+
+      // Id interno de Odoo (sirve para reconocer el pedido si después le cambian el nombre).
+      // Es un dato extra: si falla, el pedido igual queda cargado.
+      if (seleccionado.odoo_id) {
+        const { error: errId } = await supabase
+          .from("pedidos")
+          .update({ odoo_id: seleccionado.odoo_id })
+          .eq("id", data.id);
+        if (errId) console.error("No se pudo guardar el id de Odoo:", errId.message);
+      }
 
       await supabase.from("historial_pedidos").insert({
         pedido_id: data.id,

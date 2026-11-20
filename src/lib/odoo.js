@@ -1,11 +1,13 @@
 import { supabase } from "./supabase.js";
 
-export async function obtenerPedidoDeOdoo(numeroPedido) {
+// Si se pasa odooId (el id interno de Odoo), se busca por ese y devuelve el número ACTUAL
+// del pedido, que puede ser distinto del guardado si en Odoo le cambiaron el nombre.
+export async function obtenerPedidoDeOdoo(numeroPedido, odooId = null) {
   try {
     const { data, error } = await supabase.functions.invoke(
       "obtener-monto-odoo",
       {
-        body: { numero_pedido: numeroPedido },
+        body: { numero_pedido: numeroPedido, odoo_id: odooId },
       },
     );
 
@@ -15,6 +17,7 @@ export async function obtenerPedidoDeOdoo(numeroPedido) {
     }
 
     return {
+      odoo_id: data.odoo_id ?? null,
       numero_pedido: data.numero_pedido,
       monto: data.monto,
       cliente: data.cliente,

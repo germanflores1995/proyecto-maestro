@@ -299,7 +299,7 @@ export default function ObjetivoView() {
               <table className="ob-tabla" style={styles.tabla}>
                 <thead>
                   <tr>
-                    <th className="ob-th" style={styles.th}>Vendedor (en Odoo)</th>
+                    <th className="ob-th" style={styles.th}>Vendedor</th>
                     <th className="ob-th" style={{ ...styles.th, textAlign: "right" }}>Pedidos</th>
                     <th className="ob-th" style={{ ...styles.th, textAlign: "right" }}>Total vendido</th>
                     <th className="ob-th ob-col-part" style={{ ...styles.th, width: "32%" }}>Participación</th>

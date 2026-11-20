@@ -1,34 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 import { cargarConfig, contarAlertas } from "../lib/presupuestosApi";
+import { leerAvisos, guardarAvisos, suscribirAvisos } from "../lib/preferenciaAvisos";
 
 const CADA_MS = 60000;
-const CLAVE_AVISOS = "maestro_avisos_escritorio";
 
 const soportaAvisos = () => typeof window !== "undefined" && "Notification" in window;
-
-function leerPreferencia() {
-  try {
-    return localStorage.getItem(CLAVE_AVISOS) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function guardarPreferencia(valor) {
-  try {
-    localStorage.setItem(CLAVE_AVISOS, valor ? "1" : "0");
-  } catch {
-    /* sin almacenamiento: la preferencia dura solo esta sesión */
-  }
-}
 
 // Qué pide atención a cada usuario:
 // - Ventas (vendedor, encargado de ventas, admin): presupuestos con alerta roja.
 // - Expedición (expedición, encargado de expedición, admin): pedidos en espera.
 // Se recalcula cada minuto y al volver a la pestaña. Si con avisos activados
-// aparece algo nuevo y la pestaña está en segundo plano, manda un aviso del navegador.
+// aparecen presupuestos con alerta y la pestaña está en segundo plano, manda un aviso del navegador.
+// El sonido y los avisos de pedidos (en espera / listo para entregar) los maneja useAvisosPedidos.
+// El interruptor «Avisos» es compartido: está activado por defecto y se guarda en cada equipo.
 export default function useNotificaciones() {
   const { perfil, esAdmin, esVendedor, esExpedicion, esEncargadoExpedicion, esEncargadoVentas } =
     useAuth();
@@ -37,7 +23,7 @@ export default function useNotificaciones() {
   const expedicion = esAdmin || esExpedicion || esEncargadoExpedicion;
 
   const [items, setItems] = useState([]);
-  const [avisoPref, setAvisoPref] = useState(leerPreferencia);
+  const avisoPref = useSyncExternalStore(suscribirAvisos, leerAvisos, () => true);
   const [permiso, setPermiso] = useState(() =>
     soportaAvisos() ? Notification.permission : "unsupported",
   );
@@ -45,6 +31,7 @@ export default function useNotificaciones() {
 
   // Refs para leerlos dentro de cargar() sin depender de un render viejo
   const prefRef = useRef(avisoPref);
+  prefRef.current = avisoPref;
   const permisoRef = useRef(permiso);
   const anteriores = useRef(null);
 
@@ -89,7 +76,8 @@ export default function useNotificaciones() {
       permisoRef.current === "granted" &&
       document.visibilityState === "hidden"
     ) {
-      const subieron = lista.filter((i) => i.cantidad > (previos[i.id] || 0));
+      // Los pedidos en espera ya se avisan uno por uno (con sonido) desde useAvisosPedidos
+      const subieron = lista.filter((i) => i.id !== "en_espera" && i.cantidad > (previos[i.id] || 0));
       if (subieron.length > 0) {
         try {
           const aviso = new Notification("Distribuidora Maestro", {
@@ -123,31 +111,24 @@ export default function useNotificaciones() {
     };
   }, [cargar]);
 
-  // Activar o desactivar el interruptor. Al activar pide permiso al navegador.
+  // Activar o desactivar el interruptor. El sonido y los carteles funcionan siempre;
+  // al activar además se pide permiso para los avisos del sistema (cuando la pestaña está en segundo plano).
   const cambiarAvisos = async () => {
     setMensajeAvisos("");
     if (prefRef.current) {
-      prefRef.current = false;
-      setAvisoPref(false);
-      guardarPreferencia(false);
+      guardarAvisos(false);
       return;
     }
-    if (!soportaAvisos()) {
-      setMensajeAvisos("Este navegador no permite avisos.");
-      return;
-    }
+    guardarAvisos(true);
+    if (!soportaAvisos()) return;
     let p = Notification.permission;
     if (p === "default") p = await Notification.requestPermission();
     permisoRef.current = p;
     setPermiso(p);
-    if (p === "granted") {
-      prefRef.current = true;
-      setAvisoPref(true);
-      guardarPreferencia(true);
-    } else if (p === "denied") {
-      setMensajeAvisos("Los avisos están bloqueados. Habilitalos desde el candado de la barra de direcciones.");
-    } else {
-      setMensajeAvisos("No se dio permiso para los avisos.");
+    if (p === "denied") {
+      setMensajeAvisos(
+        "Los avisos del sistema están bloqueados (candado de la barra de direcciones). El sonido y los carteles dentro de la app siguen funcionando.",
+      );
     }
   };
 
@@ -161,8 +142,8 @@ export default function useNotificaciones() {
     items,
     total,
     porPagina,
-    avisosActivos: avisoPref && permiso === "granted",
-    avisosSoportados: soportaAvisos(),
+    avisosActivos: avisoPref,
+    avisosSoportados: true,
     mensajeAvisos,
     cambiarAvisos,
   };

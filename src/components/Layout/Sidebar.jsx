@@ -15,6 +15,7 @@ import {
   Users,
   Wallet,
   MoreHorizontal,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -32,6 +33,7 @@ const ICONO_INFORME = {
   metricas: BarChart3,
   objetivo: Target,
   estadisticas_presupuestos: TrendingUp,
+  validar_salidas: ClipboardCheck,
 };
 
 // Nombre del botón que abre informes y secciones secundarias
@@ -95,6 +97,14 @@ export default function Sidebar({ pagina, setPagina }) {
     informesVentas.push({ key: "estadisticas_presupuestos", label: "Estadísticas" });
   }
   if (informesVentas.length) grupos.push({ titulo: "Ventas", items: informesVentas });
+
+  // Secciones en prueba: solo el administrador
+  if (esAdmin) {
+    grupos.push({
+      titulo: "En prueba",
+      items: [{ key: "validar_salidas", label: "Validar salidas" }],
+    });
+  }
 
 
   const informesActivo = grupos.some((g) => g.items.some((i) => i.key === pagina));
@@ -308,7 +318,7 @@ export default function Sidebar({ pagina, setPagina }) {
                     <span className="nav-mu-texto">Avisos</span>
                     <small>
                       {avisosSoportados
-                        ? "Te avisa de lo que pide atención cuando estás en otra pestaña"
+                        ? "Sonido y carteles cuando entra un pedido en espera o un pedido tuyo queda listo"
                         : "Este navegador no permite avisos"}
                     </small>
                   </div>

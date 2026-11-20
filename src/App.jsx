@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy } from "react";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./components/Auth/Login";
@@ -14,6 +14,14 @@ import MetricasView from "./components/Metricas/MetricasView";
 import FormularioPedido from "./components/Pedidos/FormularioPedido";
 import PresupuestosView from "./components/Presupuestos/PresupuestosView";
 import ObjetivoView from "./components/Metricas/ObjetivoView";
+import SeccionSegura from "./components/Validacion/SeccionSegura";
+import AvisosToast from "./components/Avisos/AvisosToast";
+import useAvisosPedidos from "./hooks/useAvisosPedidos";
+
+// Sección en prueba (solo administrador): se descarga recién cuando se entra a ella
+const ValidarSalidasView = lazy(
+  () => import("./components/Validacion/ValidarSalidasView"),
+);
 
 function paginaPorDefecto({ esVendedor, esExpedicion, esCaja, esAdmin }) {
   if (esVendedor) return "vendedor";
@@ -36,6 +44,8 @@ function AppShell() {
     esAdmin,
   } = useAuth();
   const [pagina, setPagina] = useState(null);
+  // Sonido y carteles de aviso de pedidos (en espera / listo para entregar)
+  const { carteles, cerrar: cerrarCartel } = useAvisosPedidos();
 
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -189,8 +199,22 @@ function AppShell() {
           {pagina === "caja" && <CajaView />}
           {pagina === "admin" && <AdminPanel />}
           {pagina === "metricas" && <MetricasView />}
+          {pagina === "validar_salidas" && esAdmin && (
+            <SeccionSegura nombre="Validar salidas">
+              <ValidarSalidasView />
+            </SeccionSegura>
+          )}
         </main>
       </div>
+
+      <AvisosToast
+        carteles={carteles}
+        onCerrar={cerrarCartel}
+        onVer={(c) => {
+          cerrarCartel(c.id);
+          cambiarPagina(c.tipo === "espera" ? "expedicion" : "vendedor");
+        }}
+      />
 
       {mostrarFormulario && (
         <FormularioPedido
