@@ -156,11 +156,16 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
         : pedidos,
     [pedidos, soloPropios, perfil?.id],
   );
+  // Con una búsqueda escrita, los números de las solapas cuentan solo los pedidos que coinciden
+  const coincideBusqueda = (p) =>
+    !busqueda ||
+    coincideNumero(p.numero_pedido, busqueda) ||
+    p.cliente_nombre?.toLowerCase().includes(busqueda.toLowerCase());
   const cantArmar = pedidosVisibles.filter(
-    (p) => p.activo && p.estado !== "listo_para_entregar",
+    (p) => p.activo && p.estado !== "listo_para_entregar" && coincideBusqueda(p),
   ).length;
   const cantListos = pedidosVisibles.filter(
-    (p) => p.activo && p.estado === "listo_para_entregar",
+    (p) => p.activo && p.estado === "listo_para_entregar" && coincideBusqueda(p),
   ).length;
 
   // Vendedores = quienes tienen al menos un pedido cargado
@@ -258,6 +263,7 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
   const entregadosHoy = pedidosVisibles.filter(
     (p) => p.estado === "entregado" && esHoy(p.entregado_at),
   );
+  const cantEntregadosBusq = busqueda ? entregadosHoy.filter(coincideBusqueda).length : entregadosHoy.length;
   const montoTotalHoy = entregadosHoy.reduce(
     (acc, p) => acc + (p.monto || 0),
     0,
@@ -337,7 +343,7 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
           { key: "listos", label: "Listos para entregar", n: cantListos, color: "var(--st-listo, #1a9d5a)", bg: "var(--st-listo-bg, rgba(26,157,90,0.12))" },
           ...(ocultaEntregas
             ? []
-            : [{ key: "entregados", label: "Entregados hoy", n: entregadosHoy.length, color: "var(--st-entregado, #0d9488)", bg: "var(--st-entregado-bg, rgba(13,148,136,0.12))" }]),
+            : [{ key: "entregados", label: "Entregados hoy", n: cantEntregadosBusq, color: "var(--st-entregado, #0d9488)", bg: "var(--st-entregado-bg, rgba(13,148,136,0.12))" }]),
         ].map((t) => {
           const activa = tab === t.key;
           return (
@@ -415,6 +421,7 @@ export default function ExpedicionView({ busqueda, notifActivas, onNuevoPedido }
         <div className="exp-espacio" />
         <span className="exp-cuenta">
           {filtrados.length} pedido{filtrados.length !== 1 ? "s" : ""}
+          {busqueda ? (filtrados.length !== 1 ? " coinciden" : " coincide") : ""}
         </span>
 
         <div className="exp-vista" style={styles.viewToggle}>

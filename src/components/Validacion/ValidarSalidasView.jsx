@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
-import { ClipboardCheck, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ClipboardCheck, Search, X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { limpiarCliente } from "../../utils/ordenar";
-import { formatearHora } from "../../utils/helpers";
+import { coincideNumero, formatearHora } from "../../utils/helpers";
 
 // Validar salidas de mercadería en Odoo.
 // Toma los pedidos que se entregaron en la app ese día y muestra cómo está su entrega en Odoo.
@@ -55,10 +55,13 @@ const ACCIONES = {
 const CSS = `
 .vs-pagina { padding: 20px 20px 60px; max-width: 1200px; margin: 0 auto; }
 .vs-titulo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.vs-prueba { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--warning-bg); color: var(--warning); letter-spacing: 0.03em; }
 .vs-aviso { margin: 14px 0 18px; padding: 11px 14px; border-radius: 10px; background: var(--surface-container); border-left: 3px solid var(--primary); font-size: 13px; color: var(--text-secondary); }
 .vs-controles { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 18px; }
 .vs-campo { display: flex; flex-direction: column; gap: 5px; }
+.vs-buscador { position: relative; flex: 1 1 260px; max-width: 420px; }
+.vs-buscador input { width: 100%; padding-left: 34px; padding-right: 32px; }
+.vs-buscador .vs-lupa { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.vs-buscador .vs-limpiar { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: inline-flex; }
 .vs-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .vs-chip { border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
 .vs-chip:hover { border-color: var(--primary); }
@@ -142,6 +145,7 @@ export default function ValidarSalidasView() {
   const [ejecutando, setEjecutando] = useState(null); // "simular" | "validar" | null
   const [confirmando, setConfirmando] = useState(false);
   const [resumen, setResumen] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
 
   const consultar = async () => {
     setError("");
@@ -150,6 +154,7 @@ export default function ValidarSalidasView() {
     setFiltro("todos");
     setResumen(null);
     setConfirmando(false);
+    setBusqueda("");
     try {
       const [desde, hasta] = rangoDelDia(fecha);
       const { data: peds, error: errPedidos } = await supabase
@@ -187,17 +192,39 @@ export default function ValidarSalidasView() {
     }
   };
 
+  // Al entrar se consulta el día de hoy, para poder buscar enseguida
+  const consultoAlEntrar = useRef(false);
+  useEffect(() => {
+    if (!esAdmin || consultoAlEntrar.current) return;
+    consultoAlEntrar.current = true;
+    consultar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esAdmin]);
+
+  // Filas que coinciden con lo escrito en el buscador (número de pedido o nombre del cliente)
+  const buscadas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return filas || [];
+    return (filas || []).filter(
+      (f) =>
+        coincideNumero(f.pedido.numero_pedido, q) ||
+        (f.pedido.cliente_nombre || "").toLowerCase().includes(q) ||
+        limpiarCliente(f.pedido.cliente_nombre || "").toLowerCase().includes(q),
+    );
+  }, [filas, busqueda]);
+
   // Pedidos marcados que todavía se pueden validar
   const marcados = useMemo(
     () =>
-      (filas || []).filter(
+      buscadas.filter(
         (f) => seleccion.has(f.pedido.numero_pedido) && CANDIDATAS.includes(f.odoo.clasificacion),
       ),
-    [filas, seleccion],
+    [buscadas, seleccion],
   );
+  // Con una búsqueda activa, «Marcar todos» solo alcanza a los pedidos que se están viendo
   const candidatas = useMemo(
-    () => (filas || []).filter((f) => CANDIDATAS.includes(f.odoo.clasificacion)),
-    [filas],
+    () => buscadas.filter((f) => CANDIDATAS.includes(f.odoo.clasificacion)),
+    [buscadas],
   );
 
   const alternar = (numero) =>
@@ -245,15 +272,15 @@ export default function ValidarSalidasView() {
 
   const conteos = useMemo(() => {
     const c = {};
-    (filas || []).forEach((f) => {
+    buscadas.forEach((f) => {
       c[f.odoo.clasificacion] = (c[f.odoo.clasificacion] || 0) + 1;
     });
     return c;
-  }, [filas]);
+  }, [buscadas]);
 
   const visibles = useMemo(
-    () => (filas || []).filter((f) => filtro === "todos" || f.odoo.clasificacion === filtro),
-    [filas, filtro],
+    () => buscadas.filter((f) => filtro === "todos" || f.odoo.clasificacion === filtro),
+    [buscadas, filtro],
   );
 
   if (!esAdmin) return null;
@@ -267,13 +294,12 @@ export default function ValidarSalidasView() {
         <h2 style={{ fontFamily: "Montserrat, sans-serif", fontSize: 24, fontWeight: 800, margin: 0 }}>
           Validar salidas
         </h2>
-        <span className="vs-prueba">EN PRUEBA · SOLO ADMINISTRADOR</span>
       </div>
 
       <div className="vs-aviso">
-        Elegí un día y se revisa en Odoo el estado de la salida de mercadería de los pedidos que se entregaron en la
-        app ese día. <strong>«Simular» no modifica nada.</strong> «Validar» comprueba la disponibilidad en Odoo y, si
-        está todo reservado, valida la entrega; si falta stock la deja pendiente para hacerla a mano.
+        Se revisa en Odoo el estado de la salida de mercadería de los pedidos entregados en la app el día elegido.{" "}
+        <strong>«Simular» no modifica nada.</strong> «Validar» comprueba la disponibilidad y, si está todo reservado,
+        valida la entrega; si falta stock la deja pendiente para hacerla a mano.
       </div>
 
       <div className="vs-controles">
@@ -289,6 +315,28 @@ export default function ValidarSalidasView() {
             onChange={(e) => setFecha(e.target.value)}
             style={{ width: 190 }}
           />
+        </div>
+        <div className="vs-campo vs-buscador">
+          <label className="form-label" style={{ margin: 0 }}>
+            Buscar
+          </label>
+          <div style={{ position: "relative" }}>
+            <Search size={15} className="vs-lupa" />
+            <input
+              className="input"
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="N° de pedido o nombre del cliente"
+              disabled={!filas}
+              aria-label="Buscar un pedido o cliente entre los entregados del día"
+            />
+            {busqueda && (
+              <button className="vs-limpiar" onClick={() => setBusqueda("")} aria-label="Borrar búsqueda">
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
         <button className="btn btn-primary" onClick={consultar} disabled={cargando || !fecha || !!ejecutando}>
           {cargando ? (
@@ -325,7 +373,7 @@ export default function ValidarSalidasView() {
             <>
               <div className="vs-acciones">
                 <span className="vs-sel">
-                  <b>{marcados.length}</b> de {candidatas.length} pedidos pendientes marcados
+                  <b>{marcados.length}</b> de {candidatas.length} pedidos pendientes{busqueda.trim() ? " de la búsqueda" : ""} marcados
                   <button
                     className="vs-link"
                     disabled={!!ejecutando}
@@ -403,7 +451,7 @@ export default function ValidarSalidasView() {
               className={`vs-chip${filtro === "todos" ? " vs-chip-activo" : ""}`}
               onClick={() => setFiltro("todos")}
             >
-              Todos <b>{filas.length}</b>
+              Todos <b>{buscadas.length}</b>
             </button>
             {ORDEN_RESULTADOS.filter((k) => conteos[k]).map((k) => (
               <button
@@ -416,7 +464,17 @@ export default function ValidarSalidasView() {
             ))}
           </div>
 
-          <div className="card vs-tabla">
+          {buscadas.length === 0 && (
+            <div className="empty-state">
+              <Search size={34} />
+              <p style={{ fontSize: 14, fontWeight: 600 }}>Sin coincidencias</p>
+              <p style={{ fontSize: 12.5 }}>
+                «{busqueda.trim()}» no figura entre los pedidos entregados en la app ese día.
+              </p>
+            </div>
+          )}
+
+          <div className="card vs-tabla" style={buscadas.length === 0 ? { display: "none" } : undefined}>
             <div className="vs-cab">
               <div>Pedido</div>
               <div>Cliente</div>
@@ -487,7 +545,7 @@ export default function ValidarSalidasView() {
           </div>
 
           <div className="vs-pie">
-            Consultado a las {formatearHora(consultadoEl)} · {visibles.length} de {filas.length} pedidos
+            Consultado a las {formatearHora(consultadoEl)} · {visibles.length} de {filas.length} pedidos{busqueda.trim() ? " · búsqueda activa" : ""}
           </div>
         </>
       )}

@@ -1,6 +1,6 @@
 import { Component, Suspense } from "react";
 
-// Envuelve una sección en prueba: se carga solo cuando se entra a ella y, si algo falla
+// Envuelve una sección: se carga solo cuando se entra a ella y, si algo falla
 // (el archivo no carga, un error al dibujarla), muestra un aviso en su lugar.
 // El resto de la aplicación sigue funcionando con normalidad.
 class Limite extends Component {
@@ -24,7 +24,7 @@ class Limite extends Component {
             «{this.props.nombre}» no se pudo mostrar
           </div>
           <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 14 }}>
-            Esta sección está en prueba. El resto de la aplicación funciona con normalidad.
+            Podés reintentar. El resto de la aplicación funciona con normalidad.
           </p>
           <p style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 14, wordBreak: "break-word" }}>
             {String(this.state.error?.message || this.state.error)}

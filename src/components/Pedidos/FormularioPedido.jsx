@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Search } from "lucide-react";
+import { X, Search, Check } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import { ESTADOS, ESTADOS_VENDEDOR } from "../../utils/constants";
@@ -7,6 +7,7 @@ import { buscarPedidosOdoo } from "../../lib/odoo";
 import { horariosDisponibles, diaDeRetiro } from "../../utils/horarios";
 
 const TZ = "America/Argentina/Buenos_Aires";
+const MAX_GRUPO = 10; // máximo de pedidos que se cargan juntos
 
 function formatearMonto(n) {
   return (
@@ -54,6 +55,10 @@ export default function FormularioPedido({ onClose, onSuccess }) {
   const [resultados, setResultados] = useState(null); // null = todavía no buscó
   const [hayMas, setHayMas] = useState(false);
   const [seleccionado, setSeleccionado] = useState(null);
+  // Carga en grupo: 2 o más pedidos del mismo cliente (con un solo pedido se usa «seleccionado», como siempre)
+  const [elegidos, setElegidos] = useState([]);
+  const [marcados, setMarcados] = useState([]); // casillas tildadas en el listado
+  const [progreso, setProgreso] = useState(null);
   const [comentarioOdoo, setComentarioOdoo] = useState("");
   const [mostrarResultados, setMostrarResultados] = useState(false);
 
@@ -85,6 +90,8 @@ export default function FormularioPedido({ onClose, onSuccess }) {
     setError("");
     setBuscando(true);
     setSeleccionado(null);
+    setElegidos([]);
+    setMarcados([]);
     setResultados(null);
 
     const res = await buscarPedidosOdoo(q);
@@ -139,68 +146,142 @@ export default function FormularioPedido({ onClose, onSuccess }) {
     setSeleccionado(r);
   };
 
+  // Abre el listado con lo que ya estaba elegido tildado
+  const abrirListado = () => {
+    setMarcados(elegidos.length > 0 ? elegidos : seleccionado ? [seleccionado] : []);
+    setMostrarResultados(true);
+  };
+
+  const alternarMarca = (r) =>
+    setMarcados((prev) =>
+      prev.some((m) => m.numero_pedido === r.numero_pedido)
+        ? prev.filter((m) => m.numero_pedido !== r.numero_pedido)
+        : prev.length >= MAX_GRUPO
+          ? prev
+          : [...prev, r],
+    );
+
+  // Aceptar en el listado: con un pedido tildado funciona como siempre; con varios, carga en grupo
+  const aceptarMarcados = () => {
+    if (marcados.length === 0) return;
+    if (marcados.length === 1) {
+      setElegidos([]);
+      elegirPedido(marcados[0]);
+    } else {
+      setSeleccionado(null);
+      setElegidos(marcados);
+    }
+    setMostrarResultados(false);
+  };
+
+  // Guarda UN pedido (el mismo paso para la carga de a uno y para la carga en grupo)
+  const guardarUno = async (r, obs) => {
+    // Verificar si ya existe un pedido activo con ese número
+    const { data: existente } = await supabase
+      .from("pedidos")
+      .select("id")
+      .eq("numero_pedido", r.numero_pedido)
+      .eq("activo", true)
+      .maybeSingle();
+
+    if (existente) {
+      throw new Error(
+        "Ya existe un pedido activo con ese número. Modificá su estado en vez de crear uno nuevo.",
+      );
+    }
+
+    const { data, error: errPedido } = await supabase
+      .from("pedidos")
+      .insert({
+        numero_pedido: r.numero_pedido,
+        cliente_nombre: r.cliente,
+        vendedor_id: perfil.id,
+        estado,
+        pago,
+        facturado: false, // ya no se pide en pantalla; la columna de la base no se toca
+        observaciones: obs,
+        hora_desde: horarios.aplica ? horaDesde : null,
+        hora_desde_dia: horarios.aplica && horaDesde ? diaDeRetiro(estado) : null,
+        monto: Number(r.monto),
+      })
+      .select()
+      .single();
+
+    if (errPedido) throw errPedido;
+
+    // Id interno de Odoo (sirve para reconocer el pedido si después le cambian el nombre).
+    // Es un dato extra: si falla, el pedido igual queda cargado.
+    if (r.odoo_id) {
+      const { error: errId } = await supabase
+        .from("pedidos")
+        .update({ odoo_id: r.odoo_id })
+        .eq("id", data.id);
+      if (errId) console.error("No se pudo guardar el id de Odoo:", errId.message);
+    }
+
+    await supabase.from("historial_pedidos").insert({
+      pedido_id: data.id,
+      usuario_id: perfil.id,
+      estado_anterior: null,
+      estado_nuevo: estado,
+      descripcion: `Pedido cargado por ${perfil.nombre}`,
+    });
+  };
+
+  // Carga en grupo: de a uno, como si se hubieran cargado por separado.
+  // Si uno falla, los demás se cargan igual y el que falló queda elegido para reintentar.
+  const guardarGrupo = async () => {
+    setError("");
+    setLoading(true);
+    const total = elegidos.length;
+    const fallidos = [];
+    let cargados = 0;
+    for (let i = 0; i < total; i++) {
+      const r = elegidos[i];
+      setProgreso({ hecho: i, total });
+      try {
+        // Cada pedido lleva su propio comentario de Odoo como observación (lo ve Expedición)
+        await guardarUno(r, (r.comentario || "").trim() || null);
+        cargados++;
+      } catch (err) {
+        fallidos.push({ r, motivo: err?.message || "error al guardar" });
+      }
+    }
+    setProgreso(null);
+    setLoading(false);
+    if (cargados > 0) onSuccess?.();
+    if (fallidos.length === 0) {
+      onClose();
+      return;
+    }
+    const restantes = fallidos.map((f) => f.r);
+    if (restantes.length === 1) {
+      setElegidos([]);
+      elegirPedido(restantes[0]);
+    } else {
+      setElegidos(restantes);
+    }
+    setError(
+      `Se cargaron ${cargados} de ${total}. No se pudo cargar: ${fallidos
+        .map((f) => `#${f.r.numero_pedido} (${f.motivo})`)
+        .join("; ")}. Quedaron elegidos para reintentar.`,
+    );
+  };
+
   const handleSubmit = async () => {
+    if (elegidos.length > 1) {
+      await guardarGrupo();
+      return;
+    }
     if (!seleccionado) {
       setError("Buscá y elegí un pedido de Odoo primero.");
       return;
     }
 
-    // Verificar si ya existe un pedido activo con ese número
-    const { data: existente } = await supabase
-      .from("pedidos")
-      .select("id")
-      .eq("numero_pedido", seleccionado.numero_pedido)
-      .eq("activo", true)
-      .maybeSingle();
-
-    if (existente) {
-      setError(
-        "Ya existe un pedido activo con ese número. Modificá su estado en vez de crear uno nuevo.",
-      );
-      return;
-    }
-
     setError("");
     setLoading(true);
-
     try {
-      const { data, error: errPedido } = await supabase
-        .from("pedidos")
-        .insert({
-          numero_pedido: seleccionado.numero_pedido,
-          cliente_nombre: seleccionado.cliente,
-          vendedor_id: perfil.id,
-          estado,
-          pago,
-          facturado: false, // ya no se pide en pantalla; la columna de la base no se toca
-          observaciones: observaciones.trim() || null,
-          hora_desde: horarios.aplica ? horaDesde : null,
-          hora_desde_dia: horarios.aplica && horaDesde ? diaDeRetiro(estado) : null,
-          monto: Number(seleccionado.monto),
-        })
-        .select()
-        .single();
-
-      if (errPedido) throw errPedido;
-
-      // Id interno de Odoo (sirve para reconocer el pedido si después le cambian el nombre).
-      // Es un dato extra: si falla, el pedido igual queda cargado.
-      if (seleccionado.odoo_id) {
-        const { error: errId } = await supabase
-          .from("pedidos")
-          .update({ odoo_id: seleccionado.odoo_id })
-          .eq("id", data.id);
-        if (errId) console.error("No se pudo guardar el id de Odoo:", errId.message);
-      }
-
-      await supabase.from("historial_pedidos").insert({
-        pedido_id: data.id,
-        usuario_id: perfil.id,
-        estado_anterior: null,
-        estado_nuevo: estado,
-        descripcion: `Pedido cargado por ${perfil.nombre}`,
-      });
-
+      await guardarUno(seleccionado, observaciones.trim() || null);
       onSuccess?.();
       onClose();
     } catch (err) {
@@ -254,7 +335,7 @@ export default function FormularioPedido({ onClose, onSuccess }) {
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {resultados.length === 0
                 ? "Sin coincidencias"
-                : `${resultados.length} ${resultados.length === 1 ? "pedido" : "pedidos"} · elegí uno`}
+                : `${resultados.length} ${resultados.length === 1 ? "pedido" : "pedidos"} · tildá uno o varios del mismo cliente`}
             </div>
           </div>
           <button className="btn-icon" onClick={() => setMostrarResultados(false)}>
@@ -277,19 +358,25 @@ export default function FormularioPedido({ onClose, onSuccess }) {
           ) : (
             resultados.map((r, i) => {
               const bloqueado = r.cargable === false;
-              const deshabilitado = bloqueado || r.yaCargado;
+              const marcado = marcados.some((m) => m.numero_pedido === r.numero_pedido);
+              const otroCliente = !marcado && marcados.length > 0 && marcados[0].cliente !== r.cliente;
+              const lleno = !marcado && marcados.length >= MAX_GRUPO;
+              const deshabilitado = bloqueado || r.yaCargado || otroCliente || lleno;
               let motivo = "";
               if (r.yaCargado) motivo = "Ya cargado";
               else if (bloqueado)
                 motivo = `${ESTADOS_ODOO[r.estado_odoo] || r.estado_odoo} en Odoo`;
+              else if (otroCliente) motivo = "Otro cliente";
+              else if (lleno) motivo = `Máximo ${MAX_GRUPO} pedidos`;
               return (
                 <button
                   key={r.numero_pedido}
                   type="button"
+                  role="checkbox"
+                  aria-checked={marcado}
                   onClick={() => {
                     if (deshabilitado) return;
-                    elegirPedido(r);
-                    setMostrarResultados(false);
+                    alternarMarca(r);
                   }}
                   disabled={deshabilitado}
                   style={{
@@ -308,15 +395,33 @@ export default function FormularioPedido({ onClose, onSuccess }) {
                         : "none",
                     cursor: deshabilitado ? "not-allowed" : "pointer",
                     opacity: deshabilitado ? 0.55 : 1,
+                    background: marcado ? "var(--primary-subtle)" : "transparent",
                   }}
                   onMouseEnter={(ev) => {
                     if (!deshabilitado)
                       ev.currentTarget.style.background = "var(--primary-subtle)";
                   }}
                   onMouseLeave={(ev) => {
-                    ev.currentTarget.style.background = "transparent";
+                    ev.currentTarget.style.background = marcado ? "var(--primary-subtle)" : "transparent";
                   }}
                 >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: `2px solid ${marcado ? "var(--primary)" : "var(--border-strong, #cbd5e1)"}`,
+                      background: marcado ? "var(--primary)" : "transparent",
+                      color: "#fff",
+                    }}
+                  >
+                    {marcado && <Check size={14} strokeWidth={3} />}
+                  </span>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>
                       #{r.numero_pedido}
@@ -364,6 +469,34 @@ export default function FormularioPedido({ onClose, onSuccess }) {
             Hay más resultados. Escribí más dígitos o más letras para afinar.
           </div>
         )}
+        {resultados.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "12px 16px",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <div style={{ fontSize: 12.5, color: "var(--text-secondary)" }}>
+              {marcados.length === 0
+                ? "Tildá los pedidos a cargar"
+                : `${marcados.length} ${marcados.length === 1 ? "pedido" : "pedidos"} · ${formatearMonto(
+                    marcados.reduce((t, m) => t + Number(m.monto || 0), 0),
+                  )}`}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={aceptarMarcados}
+              disabled={marcados.length === 0}
+            >
+              Aceptar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -404,6 +537,8 @@ export default function FormularioPedido({ onClose, onSuccess }) {
                 onChange={(e) => {
                   setTexto(e.target.value);
                   setSeleccionado(null);
+                  setElegidos([]);
+                  setMarcados([]);
                   setResultados(null);
                   setError("");
                 }}
@@ -435,7 +570,7 @@ export default function FormularioPedido({ onClose, onSuccess }) {
                 )}
               </button>
             </div>
-            {!seleccionado && resultados === null && !buscando && (
+            {!seleccionado && elegidos.length === 0 && resultados === null && !buscando && (
               <p
                 style={{
                   fontSize: 12,
@@ -448,6 +583,93 @@ export default function FormularioPedido({ onClose, onSuccess }) {
               </p>
             )}
           </div>
+
+          {/* Carga en grupo: varios pedidos del mismo cliente */}
+          {elegidos.length > 1 && (
+            <div className="form-group">
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  background: "var(--primary-subtle)",
+                  border: "1px solid var(--primary)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--primary)",
+                      }}
+                    >
+                      {elegidos.length} pedidos
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--primary)" }}>
+                      {limpiarCliente(elegidos[0].cliente)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Total
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>
+                      {formatearMonto(elegidos.reduce((t, m) => t + Number(m.monto || 0), 0))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={abrirListado}
+                      style={{
+                        marginTop: 4,
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        fontSize: 12,
+                        color: "var(--primary)",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                      }}
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {elegidos.map((r) => (
+                    <div
+                      key={r.numero_pedido}
+                      style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}
+                    >
+                      <span style={{ fontWeight: 600 }}>#{r.numero_pedido}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{formatearMonto(Number(r.monto))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+                Estado, horario y pago valen para todos. Cada pedido se carga por separado, con su propio comentario de
+                Odoo.
+              </p>
+            </div>
+          )}
 
           {/* Pedido elegido */}
           {seleccionado && (
@@ -515,7 +737,7 @@ export default function FormularioPedido({ onClose, onSuccess }) {
                   {resultados && resultados.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setMostrarResultados(true)}
+                      onClick={abrirListado}
                       style={{
                         marginTop: 4,
                         background: "none",
@@ -693,19 +915,21 @@ export default function FormularioPedido({ onClose, onSuccess }) {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">
-              Comentario / observaciones (opcional)
-            </label>
-            <textarea
-              className="input"
-              placeholder="Ej: op1, cliente con urgencia..."
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              rows={2}
-              style={{ resize: "vertical", minHeight: 60 }}
-            />
-          </div>
+          {elegidos.length < 2 && (
+            <div className="form-group">
+              <label className="form-label">
+                Comentario / observaciones (opcional)
+              </label>
+              <textarea
+                className="input"
+                placeholder="Ej: op1, cliente con urgencia..."
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                rows={2}
+                style={{ resize: "vertical", minHeight: 60 }}
+              />
+            </div>
+          )}
 
           {error && <p className="form-error">{error}</p>}
         </div>
@@ -722,8 +946,10 @@ export default function FormularioPedido({ onClose, onSuccess }) {
             {loading ? (
               <>
                 <span className="spinner" />
-                Guardando...
+                {progreso ? `Guardando ${progreso.hecho + 1} de ${progreso.total}...` : "Guardando..."}
               </>
+            ) : elegidos.length > 1 ? (
+              `Guardar ${elegidos.length} pedidos`
             ) : (
               "Guardar pedido"
             )}

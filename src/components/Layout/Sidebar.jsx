@@ -90,6 +90,9 @@ export default function Sidebar({ pagina, setPagina }) {
   if (esAdmin || esEncargadoExpedicion) {
     informesExpedicion.push({ key: "objetivo", label: "Objetivo" });
   }
+  if (esAdmin) {
+    informesExpedicion.push({ key: "validar_salidas", label: "Validar salidas" });
+  }
   if (informesExpedicion.length) grupos.push({ titulo: "Expedición", items: informesExpedicion });
 
   const informesVentas = [];
@@ -97,14 +100,6 @@ export default function Sidebar({ pagina, setPagina }) {
     informesVentas.push({ key: "estadisticas_presupuestos", label: "Estadísticas" });
   }
   if (informesVentas.length) grupos.push({ titulo: "Ventas", items: informesVentas });
-
-  // Secciones en prueba: solo el administrador
-  if (esAdmin) {
-    grupos.push({
-      titulo: "En prueba",
-      items: [{ key: "validar_salidas", label: "Validar salidas" }],
-    });
-  }
 
 
   const informesActivo = grupos.some((g) => g.items.some((i) => i.key === pagina));
@@ -318,7 +313,7 @@ export default function Sidebar({ pagina, setPagina }) {
                     <span className="nav-mu-texto">Avisos</span>
                     <small>
                       {avisosSoportados
-                        ? "Sonido y carteles cuando entra un pedido en espera o un pedido tuyo queda listo"
+                        ? "Te avisa de lo que pide atención cuando estás en otra pestaña"
                         : "Este navegador no permite avisos"}
                     </small>
                   </div>
