@@ -16,6 +16,7 @@ import {
   Wallet,
   MoreHorizontal,
   ClipboardCheck,
+  Undo2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -34,6 +35,8 @@ const ICONO_INFORME = {
   objetivo: Target,
   estadisticas_presupuestos: TrendingUp,
   validar_salidas: ClipboardCheck,
+    devoluciones: Undo2,
+  notas_credito: Wallet,
 };
 
 // Nombre del botón que abre informes y secciones secundarias
@@ -101,7 +104,16 @@ export default function Sidebar({ pagina, setPagina }) {
   }
   if (informesVentas.length) grupos.push({ titulo: "Ventas", items: informesVentas });
 
-
+  // Devoluciones: en prueba, solo el administrador
+  if (esAdmin) {
+    grupos.push({
+      titulo: "Devoluciones",
+      items: [
+        { key: "devoluciones", label: "Nueva devolución" },
+        { key: "notas_credito", label: "Caja · Notas de crédito" },
+      ],
+    });
+  }
   const informesActivo = grupos.some((g) => g.items.some((i) => i.key === pagina));
 
   // Un solo desplegable de la barra superior abierto a la vez: null | "informes" | "campana" | "usuario"

@@ -9,6 +9,7 @@ import VendedorView from "./components/Vendedor/VendedorView";
 import ExpedicionView from "./components/Expedicion/ExpedicionView";
 import DevolucionesView from "./components/Devoluciones/DevolucionesView";
 import CajaView from "./components/Caja/CajaView";
+import CajaNotasCredito from "./components/Devoluciones/CajaNotasCredito";
 import AdminPanel from "./components/Admin/AdminPanel";
 import MetricasView from "./components/Metricas/MetricasView";
 import FormularioPedido from "./components/Pedidos/FormularioPedido";
@@ -195,7 +196,9 @@ function AppShell() {
             />
           )}
           {pagina === "objetivo" && <ObjetivoView />}
-          {pagina === "devoluciones" && <DevolucionesView />}
+          {/* Devoluciones / notas de crédito: en prueba, solo el administrador */}
+          {pagina === "devoluciones" && esAdmin && <DevolucionesView />}
+          {pagina === "notas_credito" && esAdmin && <CajaNotasCredito />}
           {pagina === "caja" && <CajaView />}
           {pagina === "admin" && <AdminPanel />}
           {pagina === "metricas" && <MetricasView />}
